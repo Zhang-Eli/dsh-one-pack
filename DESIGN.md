@@ -165,6 +165,8 @@ export class SyncEngine {
 ## 8. Web UI（owner: client-ui）
 
 侧栏 `sidebar.panellist`（id `one-pack`, order 30, label 来自 locale）+ `main` 面板（key `one-pack`）。
-面板：仓库/分支/Token 配置卡（「生成 Token ↗」直达 GitHub 生成页；保存 token 后若未配仓库自动建私有仓库，另有手动「自动创建私有仓库」按钮；显示 hasToken）、分区开关、Push/Pull 按钮 + preview 摘要对话框
-（显示 items/warnings + 确认执行）、最近历史。全部中文文案走 locale（zh/en），颜色只用 `var(--dsw-alias-*)`。
+面板（0.2.3 起）：
+- 顶部 hero 卡：左列连接区（未保存 token 时只有一个 Token 输入框 +「保存并创建仓库」，保存后自动建私有仓库；已连接时只显示仓库名、设备与「更换 Token / 移除 / 在 GitHub 打开 / 手动填写仓库」文字操作，仓库与分支表单默认收起），右列同步区（推送/拉取两个主按钮 + 上次同步/远端状态）。
+- 下方两列：同步分区（两列紧凑开关网格，plugins/settings/skills/sessions/files）与最近历史。
+- preview 摘要对话框保留（items/warnings + 确认执行）。全部文案走 locale（zh/en），颜色只用 `var(--dsw-alias-*)`。
 client.js 只需 fetch `/one-pack/api/*`，不碰 host 内部。

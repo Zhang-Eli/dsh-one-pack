@@ -118,6 +118,22 @@ window.__ModuleLoader__.load({
       repoAutoCreated: '已创建私有仓库 {repo} 并设为同步仓库',
       repoAutoExisting: '已使用现有私有仓库 {repo}',
       repoAutoFailed: '自动创建仓库失败',
+      connTitle: '连接',
+      connSyncTitle: '同步',
+      connHintFirst: '只需填写一次 GitHub Token；保存后会自动创建私有同步仓库。',
+      connSave: '保存并创建仓库',
+      connConnected: '已连接',
+      connNoRepo: '尚未创建同步仓库',
+      connCreateRepo: '创建私有仓库',
+      connCreating: '创建中…',
+      connAdvanced: '手动填写仓库',
+      connAdvancedClose: '收起',
+      connAdvancedHint: '仅在需要指定已有仓库时使用，一般无需修改。',
+      connOpenRepo: '在 GitHub 打开',
+      connLastSync: '上次同步',
+      connReady: '已就绪，可以推送或拉取。',
+      connDevice: '设备 {device}',
+      connTokenStored: 'Token 已保存，明文只存放在 Host。',
 
       sectionsTitle: '同步分区',
       sectionsHint: '打开的分区会被打包上传；关闭的分区不会出现在包里。',
@@ -293,6 +309,22 @@ window.__ModuleLoader__.load({
       repoAutoCreated: 'Created private repository {repo} and set it as the sync target',
       repoAutoExisting: 'Using existing private repository {repo}',
       repoAutoFailed: 'Failed to create the repository automatically',
+      connTitle: 'Connection',
+      connSyncTitle: 'Sync',
+      connHintFirst: 'One GitHub token is all you need — the private sync repository is created automatically after saving.',
+      connSave: 'Save and create repository',
+      connConnected: 'Connected',
+      connNoRepo: 'No sync repository yet',
+      connCreateRepo: 'Create private repository',
+      connCreating: 'Creating…',
+      connAdvanced: 'Set repository manually',
+      connAdvancedClose: 'Hide',
+      connAdvancedHint: 'Only needed when pointing at an existing repository.',
+      connOpenRepo: 'Open on GitHub',
+      connLastSync: 'Last sync',
+      connReady: 'Ready to push or pull.',
+      connDevice: 'Device {device}',
+      connTokenStored: 'Token stored; plaintext stays on the Host.',
 
       sectionsTitle: 'Sync sections',
       sectionsHint: 'Enabled sections are packed and uploaded; disabled sections stay out of the package.',
@@ -610,14 +642,40 @@ window.__ModuleLoader__.load({
 .op-dot[data-tone="warn"]{background:var(--dsw-alias-state-warn-primary)}
 .op-dot[data-tone="brand"]{background:var(--dsw-alias-brand-primary)}
 .op-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-@media (prefers-reduced-motion:reduce){.op-overlay,.op-dialog,.op-toast,.op-btn,.op-sync-btn,.op-spinner{animation:none;transition:none}}
+.op-hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:20px;padding:16px 18px;border:1px solid var(--dsw-alias-border-l1);border-radius:14px;background:var(--dsw-alias-bg-layer-1)}
+.op-hero-col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.op-hero-title{margin:0;font-size:11px;font-weight:650;letter-spacing:.7px;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}
+.op-conn{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;padding:2px 0}
+.op-conn-dot{width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-state-success-primary);flex:none}
+.op-conn-text{font-size:13.5px;font-weight:650}
+.op-conn-repo{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:var(--dsw-alias-label-primary);word-break:break-all}
+.op-linkbtn{border:0;background:transparent;color:var(--dsw-alias-brand-primary);font:inherit;font-size:12px;cursor:pointer;padding:2px 0;display:inline-flex;align-items:center;gap:4px;border-radius:4px}
+.op-linkbtn:hover:not(:disabled){text-decoration:underline}
+.op-linkbtn:disabled{opacity:.5;cursor:not-allowed}
+.op-linkbtn:focus{outline:none}
+.op-linkbtn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
+.op-linkbtn[data-muted="1"]{color:var(--dsw-alias-label-secondary)}
+.op-token-row{display:flex;gap:8px;align-items:center;min-width:0;flex-wrap:wrap}
+.op-token-row>.op-input{flex:1 1 240px;min-width:0}
+.op-btn-lg{height:34px;padding:0 14px}
+.op-sync-stack{display:flex;flex-direction:column;gap:8px}
+.op-status-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-label-secondary);min-width:0}
+.op-section-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px}
+.op-section-grid .op-toggle-row{padding:8px 0}
+@media (max-width:820px){.op-hero{grid-template-columns:1fr}.op-section-grid{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.op-overlay,.op-dialog,.op-toast,.op-btn,.op-sync-btn,.op-linkbtn,.op-spinner{animation:none;transition:none}}
 `
 
     /** The whole page gets exactly one stylesheet; the effect cleanup removes it. */
     function ensureStyles() {
       if (typeof document === 'undefined') return () => {}
       const existing = document.querySelector('style[data-plugin-css="dsh-one-pack"]')
-      if (existing !== null) return () => {}
+      if (existing !== null) {
+        // HMR re-runs apply() without removing the previous stylesheet; keep the
+        // page-level sheet in sync with the latest bundle instead of returning stale CSS.
+        if (existing.textContent !== CSS) existing.textContent = CSS
+        return () => {}
+      }
       const el = document.createElement('style')
       el.setAttribute('data-plugin-css', 'dsh-one-pack')
       el.textContent = CSS
@@ -1182,73 +1240,14 @@ window.__ModuleLoader__.load({
       return h('span', { className: 'op-spinner', 'aria-hidden': true })
     }
 
-    function StatusRow({ label, children }) {
-      return h('div', { className: 'op-row' },
-        h('span', { className: 'op-row-k' }, label),
-        h('span', { className: 'op-row-v' }, children))
-    }
-
     /* ------------------------------------------------------------------ */
-    /* Status card                                                         */
+    /* Hero card — token setup and sync, one card                          */
     /* ------------------------------------------------------------------ */
 
-    function StateCard({ t, data, loading }) {
-      let body
-      if (!data) {
-        body = h('div', { className: 'op-loading' }, loading ? Spinner() : null, loading ? t('loading') : t('loadFailed'))
-      } else {
-        const lastSync = data.lastSync
-        const deviceText = data.device
-          ? (data.device.name || data.device.id || t('statusNoDevice')) + (data.device.platform ? ' · ' + data.device.platform : '')
-          : t('statusNoDevice')
-        const rows = [
-          h(StatusRow, { key: 'repo', label: t('statusRepo') },
-            data.repo ? h('span', { className: 'op-mono' }, data.repo) : h('span', { className: 'op-muted' }, t('repoEmpty'))),
-          h(StatusRow, { key: 'branch', label: t('statusBranch') },
-            h('span', { className: 'op-mono' }, data.branch || 'main')),
-          h(StatusRow, { key: 'device', label: t('statusDevice') },
-            h('span', null, deviceText),
-            data.device && data.device.id ? h('span', { className: 'op-chip' }, shortSha(data.device.id)) : null),
-          h(StatusRow, { key: 'token', label: t('statusToken') },
-            h('span', { className: 'op-chip', 'data-tone': data.hasToken ? 'success' : 'idle' },
-              data.hasToken ? t('statusTokenSet') : t('statusTokenUnset'))),
-          h(StatusRow, { key: 'sync', label: t('statusLastSync') },
-            lastSync
-              ? [
-                  lastSync.direction ? h('span', { key: 'dir', className: 'op-chip', 'data-tone': lastSync.direction === 'push' ? 'brand' : 'success' },
-                    lastSync.direction === 'push' ? t('syncPush') : t('syncPull')) : null,
-                  h('span', { key: 'at' }, relativeTime(t, lastSync.at)),
-                  lastSync.commitSha ? h('span', { key: 'sha', className: 'op-chip op-mono' }, t('previewCommit', { sha: shortSha(lastSync.commitSha) })) : null,
-                ]
-              : h('span', { className: 'op-muted' }, t('never'))),
-        ]
-        if (data.remote && data.remote.commitSha) {
-          rows.push(h(StatusRow, { key: 'remote', label: t('statusRemote') },
-            h('span', null, t('statusRemoteCommit', { sha: shortSha(data.remote.commitSha) })),
-            data.remote.at ? h('span', { className: 'op-muted' }, relativeTime(t, data.remote.at)) : null))
-        }
-        body = h(React.Fragment, null,
-          h('div', { className: 'op-rows' }, rows),
-          data.repoValid === false ? h('div', { className: 'op-hint', 'data-tone': 'warn' }, t('statusRepoInvalid')) : null)
-      }
-      return h('section', { className: 'op-card' },
-        h('div', { className: 'op-card-head' },
-          h('h2', { className: 'op-card-title' }, t('statusTitle')),
-          data && data.pending ? h('span', { className: 'op-chip', 'data-tone': 'warn' }, t('statusPending')) : null),
-        body)
-    }
-
-    /* ------------------------------------------------------------------ */
-    /* Repository / token card                                             */
-    /* ------------------------------------------------------------------ */
-
-    function ConfigCard(props) {
+    function HeroCard(props) {
       const t = props.t
       const data = props.data
-      const [repo, setRepo] = useState(data ? data.repo : '')
-      const [branch, setBranch] = useState(data && data.branch ? data.branch : 'main')
-      const [saving, setSaving] = useState(false)
-      const [error, setError] = useState(null)
+      const canSync = props.canSync
       const [token, setToken] = useState('')
       const [tokenBusy, setTokenBusy] = useState(false)
       const [tokenEdit, setTokenEdit] = useState(false)
@@ -1256,40 +1255,19 @@ window.__ModuleLoader__.load({
       const [tokenError, setTokenError] = useState(null)
       const [autoBusy, setAutoBusy] = useState(false)
       const [autoError, setAutoError] = useState(null)
-      const dirtyRef = useRef(false)
+      const [advanced, setAdvanced] = useState(false)
+      const [repoDraft, setRepoDraft] = useState(data && data.repo ? data.repo : '')
+      const [repoBusy, setRepoBusy] = useState(false)
+      const [repoError, setRepoError] = useState(null)
       const confirmTimer = useRef(null)
 
       useEffect(() => {
-        if (!data || dirtyRef.current) return
-        setRepo(data.repo || '')
-        setBranch(data.branch || 'main')
-      }, [data])
+        if (!advanced) setRepoDraft(data && data.repo ? data.repo : '')
+      }, [data, advanced])
 
       useEffect(() => () => {
         if (confirmTimer.current !== null) window.clearTimeout(confirmTimer.current)
       }, [])
-
-      async function saveConfig() {
-        const repoValue = repo.trim()
-        if (repoValue === '') {
-          setError(t('repoRequired'))
-          return
-        }
-        setSaving(true)
-        setError(null)
-        try {
-          await api('state', { method: 'POST', body: { repo: repoValue, branch: branch.trim() || 'main' } }, t)
-          dirtyRef.current = false
-          setBranch(branch.trim() || 'main')
-          setRepo(repoValue)
-          props.pushToast('success', t('repoSaved'))
-          props.onChanged()
-        } catch (err) {
-          setError(errorMessage(t, err, 'configSaveFailed'))
-        } finally {
-          setSaving(false)
-        }
-      }
 
       async function createRepoAutomatically() {
         if (autoBusy) return
@@ -1299,9 +1277,7 @@ window.__ModuleLoader__.load({
           const result = await api('repo/auto', { method: 'POST', body: {} }, t)
           const repoValue = result && typeof result.repo === 'string' ? result.repo : ''
           if (!repoValue) throw makeApiError('repo-create-failed', t('repoAutoFailed'))
-          dirtyRef.current = false
-          setRepo(repoValue)
-          setBranch((prev) => (prev && prev.trim() ? prev.trim() : 'main'))
+          setRepoDraft(repoValue)
           props.pushToast(
             'success',
             result.created
@@ -1325,21 +1301,20 @@ window.__ModuleLoader__.load({
         setTokenBusy(true)
         setTokenError(null)
         setAutoError(null)
-        let autoRepo = false
         try {
           await api('token', { method: 'POST', body: { token: value } }, t)
           setToken('')
           setTokenEdit(false)
           props.pushToast('success', t('tokenSaved'))
           props.onChanged()
-          // 还没配置仓库时：保存 token 后直接自动建一个私有同步仓库
-          autoRepo = !(data && data.repo)
+          // A single action: after the first token is saved, create the private
+          // sync repository automatically so the user never has to configure one.
+          if (!(data && data.repo)) await createRepoAutomatically()
         } catch (err) {
           setTokenError(errorMessage(t, err, 'tokenSaveFailed'))
         } finally {
           setTokenBusy(false)
         }
-        if (autoRepo) await createRepoAutomatically()
       }
 
       async function removeToken() {
@@ -1372,121 +1347,219 @@ window.__ModuleLoader__.load({
         }
       }
 
-      const hasToken = !!(data && data.hasToken)
-      const showTokenInput = !hasToken || tokenEdit
+      async function saveRepo() {
+        const value = repoDraft.trim()
+        if (value === '') {
+          setRepoError(t('repoRequired'))
+          return
+        }
+        setRepoBusy(true)
+        setRepoError(null)
+        try {
+          await api('state', { method: 'POST', body: { repo: value, branch: 'main' } }, t)
+          setRepoDraft(value)
+          setAdvanced(false)
+          props.pushToast('success', t('repoSaved'))
+          props.onChanged()
+        } catch (err) {
+          setRepoError(errorMessage(t, err, 'configSaveFailed'))
+        } finally {
+          setRepoBusy(false)
+        }
+      }
 
-      return h('section', { className: 'op-card' },
-        h('div', { className: 'op-card-head' },
-          h('h2', { className: 'op-card-title' }, t('configTitle')),
-          hasToken ? h('span', { className: 'op-chip', 'data-tone': 'success' }, t('statusTokenSet')) : null),
-        h('p', { className: 'op-hint', style: { margin: 0 } }, t('configHint')),
-        h('div', { className: 'op-formrow' },
-          h('label', { className: 'op-field' },
-            h('span', { className: 'op-label' }, t('repoLabel')),
-            h('input', {
-              className: 'op-input',
-              value: repo,
-              placeholder: t('repoPlaceholder'),
-              spellCheck: false,
-              disabled: saving,
-              onChange: (event) => {
-                dirtyRef.current = true
-                setRepo(event.target.value)
-              },
-            })),
-          h('label', { className: 'op-field', style: { flexBasis: 120 } },
-            h('span', { className: 'op-label' }, t('branchLabel')),
-            h('input', {
-              className: 'op-input',
-              value: branch,
-              placeholder: t('branchPlaceholder'),
-              spellCheck: false,
-              disabled: saving,
-              onChange: (event) => {
-                dirtyRef.current = true
-                setBranch(event.target.value)
-              },
-            })),
+      const hasToken = !!(data && data.hasToken)
+      const repoValue = data ? data.repo || '' : ''
+      const repoValid = !data || data.repoValid !== false
+      const lastSync = data ? data.lastSync : null
+      const deviceText = data && data.device ? data.device.name || data.device.id || '' : ''
+
+      const tokenInput = h('input', {
+        className: 'op-input',
+        type: 'password',
+        value: token,
+        placeholder: t('tokenPlaceholder'),
+        autoComplete: 'off',
+        spellCheck: false,
+        disabled: tokenBusy,
+        onChange: (event) => setToken(event.target.value),
+        onKeyDown: (event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            void saveToken()
+          }
+        },
+      })
+
+      const connectParts = []
+      if (!hasToken) {
+        connectParts.push(h('p', { className: 'op-hint', style: { margin: 0 } }, t('connHintFirst')))
+        connectParts.push(h('div', { className: 'op-token-row' },
+          tokenInput,
+          h('button', {
+            className: 'op-btn op-btn-lg',
+            'data-primary': '1',
+            type: 'button',
+            disabled: tokenBusy,
+            onClick: () => { void saveToken() },
+          }, tokenBusy ? Spinner() : null, tokenBusy ? t('saving') : t('connSave'))))
+        connectParts.push(h('div', { className: 'op-inline' },
+          h('button', { className: 'op-linkbtn', type: 'button', onClick: openTokenPage }, t('tokenGenerate')),
+          h('span', { className: 'op-hint' }, t('tokenHint'))))
+        if (tokenError) connectParts.push(h('div', { className: 'op-hint', 'data-tone': 'error' }, tokenError))
+      } else if (tokenEdit) {
+        connectParts.push(h('p', { className: 'op-hint', style: { margin: 0 } }, t('tokenHint')))
+        connectParts.push(h('div', { className: 'op-token-row' },
+          tokenInput,
           h('button', {
             className: 'op-btn',
             'data-primary': '1',
             type: 'button',
-            disabled: saving,
-            onClick: () => { void saveConfig() },
-          }, saving ? Spinner() : null, saving ? t('saving') : t('configSave')),
+            disabled: tokenBusy,
+            onClick: () => { void saveToken() },
+          }, tokenBusy ? Spinner() : null, tokenBusy ? t('saving') : t('save')),
           h('button', {
             className: 'op-btn',
             type: 'button',
-            disabled: saving || autoBusy || tokenBusy || !hasToken,
-            title: t('repoAutoHint'),
+            disabled: tokenBusy,
+            onClick: () => { setTokenEdit(false); setToken(''); setTokenError(null) },
+          }, t('cancel'))))
+        if (tokenError) connectParts.push(h('div', { className: 'op-hint', 'data-tone': 'error' }, tokenError))
+      } else {
+        connectParts.push(h('div', { className: 'op-conn' },
+          h('span', { className: 'op-conn-dot' }),
+          h('span', { className: 'op-conn-text' }, t('connConnected')),
+          repoValue
+            ? h('span', { className: 'op-conn-repo' }, repoValue)
+            : h('span', { className: 'op-muted' }, t('connNoRepo'))))
+        connectParts.push(h('div', { className: 'op-status-line' },
+          deviceText ? h('span', null, t('connDevice', { device: deviceText })) : null,
+          h('span', { className: 'op-muted' }, t('connTokenStored'))))
+        if (!repoValid) connectParts.push(h('div', { className: 'op-hint', 'data-tone': 'warn' }, t('statusRepoInvalid')))
+
+        const actions = []
+        if (!repoValue) {
+          actions.push(h('button', {
+            key: 'create',
+            className: 'op-btn op-btn-lg',
+            'data-primary': '1',
+            type: 'button',
+            disabled: autoBusy || tokenBusy,
             onClick: () => { void createRepoAutomatically() },
-          }, autoBusy ? Spinner() : null, autoBusy ? t('repoAutoCreating') : t('repoAutoCreate'))),
-        error ? h('div', { className: 'op-hint', 'data-tone': 'error' }, error) : null,
-        autoError ? h('div', { className: 'op-hint', 'data-tone': 'error' }, autoError) : null,
-        data && data.repoValid === false ? h('div', { className: 'op-hint', 'data-tone': 'warn' }, t('statusRepoInvalid')) : null,
-        h('div', { className: 'op-divider' }),
-        h('div', { className: 'op-inline' },
-          h('span', { className: 'op-label', style: { flex: '1 1 auto' } }, t('tokenLabel')),
+          }, autoBusy ? Spinner() : null, autoBusy ? t('connCreating') : t('connCreateRepo')))
+        } else {
+          actions.push(h('a', {
+            key: 'open',
+            className: 'op-linkbtn',
+            href: 'https://github.com/' + repoValue,
+            target: '_blank',
+            rel: 'noopener noreferrer',
+          }, t('connOpenRepo')))
+        }
+        actions.push(h('button', {
+          key: 'edit',
+          className: 'op-linkbtn',
+          type: 'button',
+          disabled: tokenBusy,
+          onClick: () => { setTokenEdit(true); setTokenError(null); setAutoError(null) },
+        }, t('tokenEdit')))
+        actions.push(h('button', {
+          key: 'remove',
+          className: 'op-linkbtn',
+          type: 'button',
+          disabled: tokenBusy,
+          onClick: () => { void removeToken() },
+        }, tokenConfirm ? t('tokenDeleteConfirm') : t('tokenDelete')))
+        actions.push(h('button', {
+          key: 'advanced',
+          className: 'op-linkbtn',
+          'data-muted': '1',
+          type: 'button',
+          onClick: () => setAdvanced((value) => !value),
+        }, advanced ? t('connAdvancedClose') : t('connAdvanced')))
+        connectParts.push(h('div', { className: 'op-inline' }, actions))
+
+        if (advanced) {
+          connectParts.push(h('div', { className: 'op-token-row' },
+            h('input', {
+              className: 'op-input',
+              value: repoDraft,
+              placeholder: t('repoPlaceholder'),
+              spellCheck: false,
+              disabled: repoBusy,
+              onChange: (event) => setRepoDraft(event.target.value),
+            }),
+            h('button', {
+              className: 'op-btn',
+              'data-primary': '1',
+              type: 'button',
+              disabled: repoBusy,
+              onClick: () => { void saveRepo() },
+            }, repoBusy ? Spinner() : null, repoBusy ? t('saving') : t('save'))))
+          connectParts.push(h('p', { className: 'op-hint', style: { margin: 0 } }, t('connAdvancedHint')))
+          if (repoError) connectParts.push(h('div', { className: 'op-hint', 'data-tone': 'error' }, repoError))
+        }
+        if (tokenConfirm) connectParts.push(h('div', { className: 'op-hint', 'data-tone': 'warn' }, t('tokenRemoveHint')))
+        if (autoError) connectParts.push(h('div', { className: 'op-hint', 'data-tone': 'error' }, autoError))
+        if (tokenError) connectParts.push(h('div', { className: 'op-hint', 'data-tone': 'error' }, tokenError))
+      }
+
+      function syncButton(direction) {
+        const isPush = direction === 'push'
+        const running = props.busyDirection === direction
+        return h('button', {
+          className: 'op-sync-btn',
+          'data-dir': direction,
+          type: 'button',
+          disabled: !canSync || !!props.busyDirection,
+          onClick: () => props.onPreview(direction),
+        },
+        h('span', { className: 'op-sync-btn-top' },
+          running ? Spinner() : (isPush ? h(PushIcon, { size: 16 }) : h(PullIcon, { size: 16 })),
+          isPush ? t('syncPush') : t('syncPull')),
+        h('span', { className: 'op-sync-btn-desc' },
+          running ? t('syncPreviewing') : (isPush ? t('syncPushDesc') : t('syncPullDesc'))))
+      }
+
+      const syncParts = []
+      if (lastSync) {
+        syncParts.push(h('div', { className: 'op-status-line' },
+          h('span', { className: 'op-muted' }, t('connLastSync')),
+          h('span', {
+            className: 'op-chip',
+            'data-tone': lastSync.direction === 'push' ? 'brand' : 'success',
+          }, lastSync.direction === 'push' ? t('syncPush') : t('syncPull')),
+          h('span', { className: 'op-muted' }, relativeTime(t, lastSync.at)),
+          lastSync.commitSha ? h('span', { className: 'op-chip op-mono' }, shortSha(lastSync.commitSha)) : null))
+      } else {
+        syncParts.push(h('div', { className: 'op-status-line' }, h('span', { className: 'op-muted' }, t('never'))))
+      }
+      syncParts.push(canSync
+        ? h('p', { className: 'op-hint', style: { margin: 0 } }, t('connReady'))
+        : h('p', { className: 'op-hint', 'data-tone': 'warn', style: { margin: 0 } }, t('syncNeedConfig')))
+      if (props.error) {
+        syncParts.push(h('div', { className: 'op-banner', 'data-tone': 'error' },
+          h('span', { style: { flex: '1 1 auto' } },
+            props.error.message,
+            props.error.code ? ' (' + props.error.code + ')' : ''),
           h('button', {
             className: 'op-btn',
+            'data-small': '1',
             type: 'button',
-            title: t('tokenGenerateHint'),
-            onClick: openTokenPage,
-          }, t('tokenGenerate')),
-          hasToken ? h('span', { className: 'op-chip', 'data-tone': 'success' }, t('statusTokenSet')) : h('span', { className: 'op-chip', 'data-tone': 'idle' }, t('statusTokenUnset'))),
-        showTokenInput
-          ? h(React.Fragment, null,
-              h('div', { className: 'op-formrow' },
-                h('label', { className: 'op-field' },
-                  h('input', {
-                    className: 'op-input',
-                    type: 'password',
-                    value: token,
-                    placeholder: t('tokenPlaceholder'),
-                    autoComplete: 'off',
-                    spellCheck: false,
-                    disabled: tokenBusy,
-                    onChange: (event) => setToken(event.target.value),
-                    onKeyDown: (event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        void saveToken()
-                      }
-                    },
-                  })),
-                h('button', {
-                  className: 'op-btn',
-                  'data-primary': '1',
-                  type: 'button',
-                  disabled: tokenBusy,
-                  onClick: () => { void saveToken() },
-                }, tokenBusy ? Spinner() : null, tokenBusy ? t('saving') : t('tokenSave')),
-                hasToken
-                  ? h('button', {
-                      className: 'op-btn',
-                      type: 'button',
-                      disabled: tokenBusy,
-                      onClick: () => { setTokenEdit(false); setToken(''); setTokenError(null) },
-                    }, t('cancel'))
-                  : null),
-              tokenError ? h('div', { className: 'op-hint', 'data-tone': 'error' }, tokenError) : null)
-          : h('div', { className: 'op-inline' },
-              h('button', {
-                className: 'op-btn',
-                type: 'button',
-                disabled: tokenBusy,
-                onClick: () => { setTokenEdit(true); setTokenError(null) },
-              }, t('tokenEdit')),
-              h('button', {
-                className: 'op-btn',
-                'data-danger': '1',
-                type: 'button',
-                disabled: tokenBusy,
-                onClick: () => { void removeToken() },
-              }, tokenBusy ? Spinner() : null, tokenConfirm ? t('tokenDeleteConfirm') : t('tokenDelete'))),
-        !showTokenInput && tokenConfirm ? h('div', { className: 'op-hint', 'data-tone': 'warn' }, t('tokenRemoveHint')) : null,
-        h('p', { className: 'op-hint', style: { margin: 0 } }, t('tokenHint')),
-        h('p', { className: 'op-hint', style: { margin: 0 } }, t('tokenGenerateHint')))
+            onClick: () => props.onPreview(props.error.direction || 'push'),
+          }, t('syncPreviewRetry'))))
+      }
+
+      const children = [
+        h('div', { key: 'connect', className: 'op-hero-col' },
+          h('h2', { className: 'op-hero-title' }, t('connTitle')),
+          ...connectParts),
+        h('div', { key: 'sync', className: 'op-hero-col' },
+          h('h2', { className: 'op-hero-title' }, t('connSyncTitle')),
+          h('div', { className: 'op-sync-stack' }, syncButton('push'), syncButton('pull')),
+          ...syncParts),
+      ]
+      return h('section', { className: 'op-hero' }, children)
     }
 
     /* ------------------------------------------------------------------ */
@@ -1526,49 +1599,7 @@ window.__ModuleLoader__.load({
           h('h2', { className: 'op-card-title' }, t('sectionsTitle')),
           h('span', { className: 'op-chip', 'data-tone': 'brand' }, t('sectionsEnabled', { on: enabledCount, total: SECTION_ORDER.length }))),
         h('p', { className: 'op-hint', style: { margin: 0 } }, t('sectionsHint')),
-        h('div', { className: 'op-section-list' }, rows))
-    }
-
-    /* ------------------------------------------------------------------ */
-    /* Sync card                                                           */
-    /* ------------------------------------------------------------------ */
-
-    function SyncCard({ t, data, canSync, busyDirection, error, onPreview }) {
-      const busy = busyDirection
-      function button(direction) {
-        const isPush = direction === 'push'
-        const running = busy === direction
-        return h('button', {
-          className: 'op-sync-btn',
-          'data-dir': direction,
-          type: 'button',
-          disabled: !canSync || !!busy,
-          onClick: () => onPreview(direction),
-        },
-        h('span', { className: 'op-sync-btn-top' },
-          running ? Spinner() : (isPush ? h(PushIcon, { size: 15 }) : h(PullIcon, { size: 15 })),
-          isPush ? t('syncPush') : t('syncPull')),
-        h('span', { className: 'op-sync-btn-desc' },
-          running
-            ? t('syncPreviewing')
-            : (isPush ? t('syncPushDesc') : t('syncPullDesc'))))
-      }
-      return h('section', { className: 'op-card' },
-        h('div', { className: 'op-card-head' },
-          h('h2', { className: 'op-card-title' }, t('syncTitle')),
-          data && data.lastSync ? h('span', { className: 'op-card-note' }, relativeTime(t, data.lastSync.at)) : null),
-        h('div', { className: 'op-sync-actions' }, button('push'), button('pull')),
-        error ? h('div', { className: 'op-banner', 'data-tone': 'error' },
-          h('span', { style: { flex: '1 1 auto' } },
-            error.message,
-            error.code ? ' (' + error.code + ')' : ''),
-          h('button', {
-            className: 'op-btn',
-            'data-small': '1',
-            type: 'button',
-            onClick: () => onPreview(error.direction || 'push'),
-          }, t('syncPreviewRetry'))) : null,
-        !canSync ? h('div', { className: 'op-hint', 'data-tone': 'warn' }, t('syncNeedConfig')) : null)
+        h('div', { className: 'op-section-grid' }, rows))
     }
 
     /* ------------------------------------------------------------------ */
@@ -1996,33 +2027,28 @@ window.__ModuleLoader__.load({
             }, t('retry'))))
       } else {
         content = h(React.Fragment, null,
+          h(HeroCard, {
+            t: t,
+            data: data,
+            canSync: canSync,
+            busyDirection: previewBusy,
+            error: syncError,
+            onPreview: (direction) => { void runPreview(direction) },
+            pushToast: pushToast,
+            onChanged: () => { void loadStatus(false) },
+          }),
           h('div', { className: 'op-grid' },
-            h(StateCard, { t: t, data: data, loading: status.loading }),
-            h(ConfigCard, {
-              t: t,
-              data: data,
-              pushToast: pushToast,
-              onChanged: () => { void loadStatus(false) },
-            }),
             h(SectionsCard, {
               t: t,
               sections: sections,
               busyName: sectionBusy,
               onToggle: (name) => { void toggleSection(name) },
             }),
-            h(SyncCard, {
+            h(HistoryCard, {
               t: t,
-              data: data,
-              canSync: canSync,
-              busyDirection: previewBusy,
-              error: syncError,
-              onPreview: (direction) => { void runPreview(direction) },
-            })),
-          h(HistoryCard, {
-            t: t,
-            history: history,
-            onRefresh: () => { void loadHistory(false) },
-          }))
+              history: history,
+              onRefresh: () => { void loadHistory(false) },
+            })))
       }
 
       return h(React.Fragment, null,
