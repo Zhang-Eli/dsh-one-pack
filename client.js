@@ -1111,6 +1111,7 @@ window.__ModuleLoader__.load({
           ? { commitSha: asText(remote.commitSha || remote.sha || remote.commit), at: asText(remote.at || remote.time) }
           : null,
         sectionsRaw: st.sections !== undefined ? st.sections : data.sections,
+        schedule: st.schedule || data.schedule || null,
         raw: data,
       }
     }
