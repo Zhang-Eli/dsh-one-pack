@@ -43,6 +43,10 @@ window.__ModuleLoader__.load({
 
     // Fixed display order mandated by DESIGN.md §1.
     const SECTION_ORDER = ['plugins', 'settings', 'skills', 'sessions', 'files']
+    // 隐藏但仍保留实现：files 分区（工作区文件）暂时不出现在面板里，
+    // 后端 section、状态字段与 API 都保留，之后调整交互时再放出来。
+    const HIDDEN_SECTIONS = new Set(['files'])
+    const VISIBLE_SECTION_ORDER = SECTION_ORDER.filter((name) => !HIDDEN_SECTIONS.has(name))
     const DEFAULT_SECTIONS = { plugins: true, settings: true, skills: false, sessions: false, files: false }
     const SEC_META = [
       { name: 'plugins', label: 'secPlugins', desc: 'secPluginsDesc' },
@@ -1515,6 +1519,7 @@ window.__ModuleLoader__.load({
       const sectionRows = []
       for (let i = 0; i < SEC_META.length; i += 1) {
         const meta = SEC_META[i]
+        if (HIDDEN_SECTIONS.has(meta.name)) continue
         const item = sections[meta.name] || { enabled: false, defaultEnabled: false }
         if (item.enabled) enabledCount += 1
         const busy = props.sectionBusy === meta.name
@@ -1538,7 +1543,7 @@ window.__ModuleLoader__.load({
       const sectionsBlock = h('div', { className: 'op-sections-block' },
         h('div', { className: 'op-inline', style: { justifyContent: 'space-between' } },
           h('h2', { className: 'op-hero-title' }, t('sectionsTitle')),
-          h('span', { className: 'op-chip', 'data-tone': 'brand' }, t('sectionsEnabled', { on: enabledCount, total: SECTION_ORDER.length }))),
+          h('span', { className: 'op-chip', 'data-tone': 'brand' }, t('sectionsEnabled', { on: enabledCount, total: VISIBLE_SECTION_ORDER.length }))),
         h('div', { className: 'op-section-grid' }, sectionRows))
 
       function syncButton(direction) {
