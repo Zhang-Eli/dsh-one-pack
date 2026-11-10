@@ -58,6 +58,7 @@ window.__ModuleLoader__.load({
       refresh: '刷新',
       refreshBusy: '刷新中…',
       retry: '重试',
+      panelError: '面板渲染出错：{message}',
       loading: '加载中…',
       loadFailed: '加载失败',
       save: '保存',
@@ -252,6 +253,7 @@ window.__ModuleLoader__.load({
       refresh: 'Refresh',
       refreshBusy: 'Refreshing…',
       retry: 'Retry',
+      panelError: 'Panel render error: {message}',
       loading: 'Loading…',
       loadFailed: 'Failed to load',
       save: 'Save',
@@ -1582,13 +1584,13 @@ window.__ModuleLoader__.load({
                       'data-tone': 'warn',
                       type: 'button',
                       'aria-expanded': warnOpen ? 'true' : 'false',
-                      title: entry.warnings.join('\n'),
+                      title: entry.warnings.map((warn) => warn.message).join('\n'),
                       onClick: () => setOpenWarn(warnOpen ? -1 : index),
                     }, t('historyWarnings', { n: entry.warnings.length }), warnOpen ? ' ▴' : ' ▾')
                   : null),
               meta.join(' · ') ? h('div', { className: 'op-hist-meta' }, meta.join(' · ')) : null,
               warnOpen && entry.warnings.length > 0
-                ? h('div', { className: 'op-hist-warn' }, entry.warnings.map((text, warnIndex) => h('span', { key: warnIndex }, text)))
+                ? h('div', { className: 'op-hist-warn' }, entry.warnings.map((warn, warnIndex) => h('span', { key: warnIndex }, (warn.code ? warn.code + ': ' : '') + warn.message)))
                 : null))
         }))
       }
@@ -2037,6 +2039,51 @@ window.__ModuleLoader__.load({
     }
 
     /* ------------------------------------------------------------------ */
+    /* Error boundary                                                      */
+    /* ------------------------------------------------------------------ */
+
+    // React.Component exists in the real client runtime; the publish gate's
+    // stub does not, so fall back to a minimal base instead of throwing while
+    // the module factory is being evaluated.
+    const BoundaryBase = (React && React.Component) || class {
+      constructor(props) { this.props = props || {} }
+      setState(next) {
+        this.state = Object.assign({}, this.state, typeof next === 'function' ? next(this.state, this.props) : next)
+      }
+    }
+
+    class PanelBoundary extends BoundaryBase {
+      constructor(props) {
+        super(props)
+        this.state = { error: null }
+        this.reset = this.reset.bind(this)
+      }
+
+      static getDerivedStateFromError(error) {
+        return { error: (error && error.message) || String(error) }
+      }
+
+      reset() {
+        this.setState({ error: null })
+      }
+
+      render() {
+        if (this.state.error) {
+          const t = this.props.t
+          return h('section', { className: 'op-card' },
+            h('div', { className: 'op-banner', 'data-tone': 'error' },
+              h('span', { style: { flex: '1 1 auto' } }, t('panelError', { message: this.state.error })),
+              h('button', { className: 'op-btn', type: 'button', onClick: this.reset }, t('retry'))))
+        }
+        return this.props.children
+      }
+    }
+
+    function PanelWithBoundary(props) {
+      return h(PanelBoundary, { t: props.t }, h(OnePackPanel, props))
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Plugin                                                              */
     /* ------------------------------------------------------------------ */
 
@@ -2075,7 +2122,7 @@ window.__ModuleLoader__.load({
           key: 'one-pack',
           locale: NS,
           inject: () => ({ t }),
-        }, OnePackPanel))
+        }, PanelWithBoundary))
       },
     }
   },

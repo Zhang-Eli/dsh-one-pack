@@ -111,6 +111,12 @@ test('client half registers sidebar entry and main panel', () => {
     'client must not use a page-level load flag (breaks HMR re-registration)',
   )
   assert.match(src, /duplicate factory registration/i, 'client must tolerate a duplicate-registration error only')
+  // Render safety: the host sends warnings as {code, message} objects, and
+  // handing an object to createElement throws "Objects are not valid as a
+  // React child", which unmounts the entire panel. Render message text only.
+  assert.match(src, /warn\.message/, 'client must render warning messages, not warning objects')
+  assert.ok(!/warnings\.map\(\(text,/.test(src), 'client must not pass warning objects as React children')
+  assert.ok(src.includes('class PanelBoundary'), 'client must keep a panel-level error boundary')
 })
 
 test('locale metadata and icon are present', () => {
