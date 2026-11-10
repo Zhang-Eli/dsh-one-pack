@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.2
+
+真机同步复核时发现的三个问题：重复推送会产生空提交、链接安装的插件会被带到别的机器、会话分区 index 带时间戳。
+
+- Push 现在按内容哈希对比远端，只上传真正变化的文件；没有任何变化时直接抛 `NOTHING_TO_SYNC`，不再产生空提交。比较基准是 One Pack 自己写在 `one-pack.json` 里的 sha256（Git 树的 blob sha 是 SHA-1，直接比较会把每个文件都误判成已变更）
+- 各分区 payload 移除 `updatedAt` 等易变时间戳（会话条目仍保留基于 mtime 的时间），同样的本机状态总是得到同样的字节，preview 能正确显示「不变」
+- plugins 分区不再导出无法在其它机器复现的 bundle：`link:` / `file:` / `workspace:` 安装的包，以及 One Pack 自身（未发布前无法从 npm 装回）。导出的包只保留可复现的 npm 规格，其余以 warning 列出
+- pull 端对远端遗留的链接安装条目同样跳过并给出 warning，而不是尝试安装一个本机不存在的路径
+- 集成测试新增「二次推送幂等」与「不可复现 bundle 被过滤」断言
+- 真机验证：`Zhang-Eli/dsh-one-pack-sync` 首次 push/pull 成功（commit `aa6eb79`），修复后同一状态再次 preview push 显示 0 变更
+
 ## 0.2.1
 
 修复 0.2.0 刷新/热更新后侧栏入口消失的问题。

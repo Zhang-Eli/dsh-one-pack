@@ -9,6 +9,7 @@ import { join, dirname } from 'node:path'
 
 import { SyncEngine } from '../lib/orchestrator.mjs'
 import { StateStore } from '../lib/state.mjs'
+import { createHash } from 'node:crypto'
 import { sha256 } from '../lib/util.mjs'
 import { projectKey } from '../lib/vendor/projectkey.mjs'
 
@@ -24,7 +25,11 @@ function makeFakeCloud() {
   let seq = 0
   const snapshot = () => {
     const map = new Map()
-    for (const [path, buf] of files) map.set(path, { path, sha: sha256(buf), size: buf.length })
+    // GitHub 树里的 blob sha 是 SHA-1，真实 CloudRepo 就返回这个；用 sha256 会造成
+    // 「与真实实现不一致」的假绿。
+    for (const [path, buf] of files) {
+      map.set(path, { path, sha: createHash('sha1').update(buf).digest('hex'), size: buf.length })
+    }
     return { empty: files.size === 0, commitSha, treeSha: commitSha, files: map, map }
   }
   return {
@@ -154,7 +159,13 @@ test('push from home A, pull into home B, every partition round-trips', async ()
       rows: [{ entry: settingsEntry, inherited: { theme: 'light' }, override: { theme: 'dark', apiKey: 'plain-secret' } }],
     })
     const pluginsA = makePluginManager({
-      bundles: [{ name: 'dsh-ops', version: '0.5.2', enabled: true, installed: true, installTarget: { spec: 'dsh-ops@0.5.2', version: '0.5.2' } }],
+      bundles: [
+        { name: 'dsh-ops', version: '0.5.2', enabled: true, installed: true, installTarget: { spec: 'dsh-ops@0.5.2', version: '0.5.2' } },
+        // Neither of these can be installed on another machine: One Pack is not
+        // published yet, and link installs point at a local directory.
+        { name: 'dsh-one-pack', version: '0.2.2', enabled: true, installed: true, source: 'link:D:/work/one-pack', installTarget: { spec: 'link:D:/work/one-pack', version: '0.2.2' } },
+        { name: '@local/demo', version: '0.0.0', enabled: true, installed: true, source: 'link:D:/work/demo', installTarget: { spec: 'link:D:/work/demo' } },
+      ],
       plugins: [{ entryId: 'include:settings', enabled: true }],
     })
     const cloud = makeFakeCloud()
@@ -178,6 +189,24 @@ test('push from home A, pull into home B, every partition round-trips', async ()
     }
     assert.ok(cloud.files.has(`files/${keyA}/notes/readme.md`))
     assert.ok(![...cloud.files.keys()].some((path) => path.includes('.env')), '.env must not be uploaded')
+
+    // Unreproducible bundles (link installs, One Pack itself) must not be asked
+    // for on another machine; they are reported as a warning instead.
+    const remoteBundles = await cloud.readJson('plugins/bundles.json')
+    assert.deepEqual(remoteBundles.bundles.map((bundle) => bundle.name), ['dsh-ops'])
+
+    // A second push with no local change is a no-op: section payloads carry no
+    // volatile timestamps, so unchanged files stay unchanged and execute
+    // refuses to create an empty commit.
+    const previewAgain = await engineA.preview('push')
+    assert.equal(previewAgain.summary.totals.added, 0)
+    assert.equal(previewAgain.summary.totals.changed, 0)
+    assert.ok(previewAgain.summary.totals.unchanged >= 2, 'unchanged files must be counted')
+    await assert.rejects(
+      () => engineA.execute('push', { token: previewAgain.token }),
+      (err) => err && err.code === 'NOTHING_TO_SYNC',
+      'a no-op push must not create a commit',
+    )
 
     const manifest = await cloud.readJson('one-pack.json')
     assert.equal(manifest.schema, 1)
