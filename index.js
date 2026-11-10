@@ -25,6 +25,7 @@ const TOOL_ERROR_CODES = new Set([
   'INVALID_BRANCH',
   'INVALID_FILES',
   'INVALID_TOKEN',
+  'INVALID_SCHEDULE',
   'INVALID_PHASE',
   'REPO_CREATE_FAILED',
   'GITHUB_UNAUTHORIZED',
@@ -186,6 +187,18 @@ function statusText(report) {
     `Token：${report.hasToken ? '已配置' : '未配置'}`,
     `分区：${report.sections.map((item) => `${item.name}=${item.enabled ? '开' : '关'}`).join(' ')}`,
   ];
+  if (report.schedule?.enabled) {
+    const direction = report.schedule.direction === 'pull' ? '拉取' : '推送';
+    lines.push(`定时同步：每天 ${report.schedule.time} 自动${direction}`);
+    if (report.schedule.lastRunAt) {
+      lines.push(
+        `定时结果：${report.schedule.lastOk === false ? '失败' : '正常'} · ${report.schedule.lastRunAt}` +
+          (report.schedule.lastError ? ` · ${report.schedule.lastError}` : ''),
+      );
+    }
+  } else {
+    lines.push('定时同步：关闭');
+  }
   if (report.lastSync) {
     lines.push(
       `最近同步：${report.lastSync.at} · ${report.lastSync.direction} · ${report.lastSync.commitSha || '—'}`,
@@ -520,6 +533,16 @@ export function apply(ctx) {
               sendJson(res, 200, { ok: true, result });
               return;
             }
+            if (method === 'POST' && sub === 'schedule') {
+              const body = await readBody(req);
+              const patch = {};
+              if ('enabled' in body) patch.enabled = body.enabled;
+              if ('time' in body) patch.time = body.time;
+              if ('direction' in body) patch.direction = body.direction;
+              const schedule = await engine.updateSchedule(patch);
+              sendJson(res, 200, { ok: true, result: { schedule } });
+              return;
+            }
             if (method === 'POST' && sub === 'sync') {
               const body = await readBody(req);
               if (body.direction !== 'push' && body.direction !== 'pull') {
@@ -564,6 +587,26 @@ export function apply(ctx) {
       ctx.effect(() => dispose, `one-pack: tool ${tool.name}`);
     }
   }
+
+  // 定时同步：宿主每 30 秒检查一次是否到点（本地时间，默认每天 18:00 推送）。
+  // 放在 ctx.effect 里：隔离探针不执行 effect 回调，门禁子进程不会留下计时器；
+  // 真实 Cordis 中 effect 立即执行，返回的清理函数在插件卸载时停掉计时器。
+  ctx.effect(() => {
+    let stopped = false
+    const tick = () => {
+      if (stopped) return
+      void engine.tickSchedule().catch(() => {})
+    }
+    const interval = setInterval(tick, 30 * 1000)
+    const warmup = setTimeout(tick, 8 * 1000)
+    if (typeof interval.unref === 'function') interval.unref()
+    if (typeof warmup.unref === 'function') warmup.unref()
+    return () => {
+      stopped = true
+      clearInterval(interval)
+      clearTimeout(warmup)
+    }
+  }, 'one-pack: schedule timer')
 
   // 首启时确保 state.json 存在（device 身份稳定）
   try {

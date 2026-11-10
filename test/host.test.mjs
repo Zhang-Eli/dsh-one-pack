@@ -171,6 +171,45 @@ test('apply() wires the HTTP API and agent tools', async () => {
     assert.equal(badName.status, 400)
     assert.equal(JSON.parse(badName.body).error.code, 'INVALID_REPO_NAME')
 
+    // POST schedule validates + persists the daily auto-push window
+    const schedRes = fakeResponse()
+    await routes[0].handler(
+      {
+        method: 'POST',
+        url: '/one-pack/api/schedule',
+        headers: {},
+        async *[Symbol.asyncIterator]() {
+          yield Buffer.from(JSON.stringify({ enabled: true, time: '18:00' }))
+        },
+      },
+      schedRes,
+    )
+    assert.equal(schedRes.status, 200)
+    const schedule = JSON.parse(schedRes.body).result.schedule
+    assert.equal(schedule.enabled, true)
+    assert.equal(schedule.time, '18:00')
+    assert.equal(schedule.direction, 'push')
+
+    const badSched = fakeResponse()
+    await routes[0].handler(
+      {
+        method: 'POST',
+        url: '/one-pack/api/schedule',
+        headers: {},
+        async *[Symbol.asyncIterator]() {
+          yield Buffer.from(JSON.stringify({ time: '25:99' }))
+        },
+      },
+      badSched,
+    )
+    assert.equal(badSched.status, 400)
+    assert.equal(JSON.parse(badSched.body).error.code, 'INVALID_SCHEDULE')
+
+    const statusAfterSchedule = fakeResponse()
+    await routes[0].handler({ method: 'GET', url: '/one-pack/api/status', headers: {} }, statusAfterSchedule)
+    assert.equal(statusAfterSchedule.status, 200)
+    assert.equal(JSON.parse(statusAfterSchedule.body).result.schedule.enabled, true)
+
     // status tool returns human-readable text
     const statusTool = tools.find((tool) => tool.name === 'one_pack_status')
     const status = await statusTool.execute({})

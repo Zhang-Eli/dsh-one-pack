@@ -27,6 +27,11 @@ window.__ModuleLoader__.load({
     const NS = 'dsh-one-pack'
     const API_BASE = '/one-pack/api/'
     const TOKEN_URL = 'https://github.com/settings/tokens/new?scopes=repo&description=One%20Pack%20sync'
+    // Author / feedback links shown at the foot of the panel.
+    const REPO_URL = 'https://github.com/Zhang-Eli/dsh-one-pack'
+    const ISSUES_URL = REPO_URL + '/issues'
+    const AUTHOR_NAME = 'Zhang-Eli'
+    const AUTHOR_URL = 'https://github.com/' + AUTHOR_NAME
 
     function openTokenPage() {
       window.open(TOKEN_URL, '_blank', 'noopener,noreferrer')
@@ -134,6 +139,11 @@ window.__ModuleLoader__.load({
       connOpenRepo: '在 GitHub 打开',
       connLastSync: '上次同步',
       connReady: '已就绪，可以推送或拉取。',
+      scheduleLabel: '自动推送',
+      scheduleHint: '每天 {time} 自动推送一次（DSH 运行时生效）。',
+      scheduleError: '定时设置保存失败',
+      feedback: '反馈问题',
+      developedBy: 'Developed by',
       connDevice: '设备 {device}',
       connTokenStored: 'Token 已保存，明文只存放在 Host。',
 
@@ -329,6 +339,11 @@ window.__ModuleLoader__.load({
       connOpenRepo: 'Open on GitHub',
       connLastSync: 'Last sync',
       connReady: 'Ready to push or pull.',
+      scheduleLabel: 'Auto push',
+      scheduleHint: 'Pushes once a day at {time} while DSH is running.',
+      scheduleError: 'Could not save schedule',
+      feedback: 'Feedback',
+      developedBy: 'Developed by',
       connDevice: 'Device {device}',
       connTokenStored: 'Token stored; plaintext stays on the Host.',
 
@@ -676,6 +691,20 @@ window.__ModuleLoader__.load({
 .op-sections-block .op-section-grid .op-toggle-row{padding:6px 0}
 .op-warnbtn{font:inherit;font-size:11px;line-height:1.6;cursor:pointer}
 .op-hist-warn{display:flex;flex-direction:column;gap:2px;margin-top:4px;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-state-warn-primary);word-break:break-word}
+.op-schedule{display:flex;flex-direction:column;gap:6px;margin-top:6px;padding-top:10px;border-top:1px dashed var(--dsw-alias-border-l2)}
+.op-schedule-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.op-schedule-label{font-size:12.5px;font-weight:600}
+.op-time{height:30px;padding:0 8px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;outline:none}
+.op-time:focus{border-color:var(--dsw-alias-brand-primary)}
+.op-time::-webkit-calendar-picker-indicator{opacity:.6;cursor:pointer;filter:invert(.6)}
+.op-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 2px 0;border-top:1px solid var(--dsw-alias-border-l1);font-size:12px;color:var(--dsw-alias-label-secondary)}
+.op-foot-link{display:inline-flex;align-items:center;gap:5px;color:var(--dsw-alias-label-secondary);text-decoration:none;padding:1px 0;border-radius:4px}
+.op-foot-link:hover,.op-foot-link:focus-visible{color:var(--dsw-alias-brand-primary);text-decoration:underline;text-underline-offset:3px;outline:none}
+.op-foot-dev{display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.op-foot-dev-label{font-style:italic}
+.op-foot-avatar{width:16px;height:16px;border-radius:50%;object-fit:cover;background:var(--dsw-alias-bg-layer-2);flex:none}
+.op-foot-name{color:var(--dsw-alias-label-secondary);text-decoration:none}
+.op-foot-name:hover,.op-foot-name:focus-visible{color:var(--dsw-alias-brand-primary);text-decoration:underline;text-underline-offset:3px;outline:none}
 @media (max-width:820px){.op-hero{grid-template-columns:1fr}.op-section-grid{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){.op-overlay,.op-dialog,.op-toast,.op-btn,.op-sync-btn,.op-linkbtn,.op-spinner{animation:none;transition:none}}
 `
@@ -757,6 +786,13 @@ window.__ModuleLoader__.load({
         h('path', { key: 'a', d: 'M12 4.2 21 19.4H3Z' }),
         h('path', { key: 'b', d: 'M12 9.4v4.2' }),
         h('path', { key: 'c', d: 'M12 16.6h.01' }),
+      ])
+    }
+
+    function FeedbackIcon({ size } = {}) {
+      const s = size || 13
+      return svg(s, [
+        h('path', { key: 'a', d: 'M13.2 8c0 2.5-2.3 4.5-5.2 4.5-.7 0-1.3-.1-1.9-.3l-2.9 1 .9-2.4c-.7-.7-1.2-1.7-1.2-2.8 0-2.5 2.3-4.5 5.1-4.5s5.2 2 5.2 4.5Z' }),
       ])
     }
 
@@ -1271,6 +1307,8 @@ window.__ModuleLoader__.load({
       const [tokenError, setTokenError] = useState(null)
       const [autoBusy, setAutoBusy] = useState(false)
       const [autoError, setAutoError] = useState(null)
+      const [scheduleBusy, setScheduleBusy] = useState(false)
+      const [scheduleError, setScheduleError] = useState(null)
       const confirmTimer = useRef(null)
 
       useEffect(() => () => {
@@ -1351,6 +1389,21 @@ window.__ModuleLoader__.load({
           setTokenError(errorMessage(t, err, 'tokenSaveFailed'))
         } finally {
           setTokenBusy(false)
+        }
+      }
+
+      // Daily auto-sync: the host only needs to know enabled + local HH:MM.
+      async function saveSchedule(patch) {
+        if (scheduleBusy) return
+        setScheduleBusy(true)
+        setScheduleError(null)
+        try {
+          await api('schedule', { method: 'POST', body: patch }, t)
+          props.onChanged()
+        } catch (err) {
+          setScheduleError(errorMessage(t, err, 'scheduleError'))
+        } finally {
+          setScheduleBusy(false)
         }
       }
 
@@ -1517,9 +1570,11 @@ window.__ModuleLoader__.load({
       } else {
         syncParts.push(h('div', { className: 'op-status-line' }, h('span', { className: 'op-muted' }, t('never'))))
       }
-      syncParts.push(canSync
-        ? h('p', { className: 'op-hint', style: { margin: 0 } }, t('connReady'))
-        : h('p', { className: 'op-hint', 'data-tone': 'warn', style: { margin: 0 } }, t('syncNeedConfig')))
+      // No "ready" line: the buttons are the signal. Only warn when the panel
+      // cannot sync yet.
+      if (!canSync) {
+        syncParts.push(h('p', { className: 'op-hint', 'data-tone': 'warn', style: { margin: 0 } }, t('syncNeedConfig')))
+      }
       if (props.error) {
         syncParts.push(h('div', { className: 'op-banner', 'data-tone': 'error' },
           h('span', { style: { flex: '1 1 auto' } },
@@ -1533,15 +1588,56 @@ window.__ModuleLoader__.load({
           }, t('syncPreviewRetry'))))
       }
 
+      const scheduleState = (props.schedule || (data && data.schedule)) || {}
+      const scheduleEnabled = scheduleState.enabled === true
+      const scheduleTime = typeof scheduleState.time === 'string' ? scheduleState.time : '18:00'
+
+      const scheduleBlock = h('div', { className: 'op-schedule' },
+        h('div', { className: 'op-schedule-row' },
+          h('button', {
+            type: 'button',
+            className: 'op-switch',
+            role: 'switch',
+            'aria-checked': scheduleEnabled ? 'true' : 'false',
+            'aria-label': t('scheduleLabel'),
+            title: t('scheduleLabel'),
+            disabled: scheduleBusy || !hasToken,
+            onClick: () => { void saveSchedule({ enabled: !scheduleEnabled }) },
+          }),
+          h('span', { className: 'op-schedule-label' }, t('scheduleLabel')),
+          scheduleEnabled
+            ? h('input', {
+                type: 'time',
+                className: 'op-time',
+                value: scheduleTime,
+                disabled: scheduleBusy,
+                'aria-label': t('scheduleLabel'),
+                onChange: (event) => {
+                  const value = event.target.value
+                  if (value && value !== scheduleTime) void saveSchedule({ time: value })
+                },
+              })
+            : null),
+        scheduleEnabled
+          ? h('p', { className: 'op-hint', style: { margin: 0 } }, t('scheduleHint', { time: scheduleTime }))
+          : null,
+        scheduleState.lastError
+          ? h('p', { className: 'op-hint', 'data-tone': 'warn', style: { margin: 0 } }, scheduleState.lastError)
+          : null,
+        scheduleError
+          ? h('p', { className: 'op-hint', 'data-tone': 'error', style: { margin: 0 } }, scheduleError)
+          : null)
+
       return h('section', { className: 'op-hero' },
         h('div', { key: 'connect', className: 'op-hero-col' },
           h('h2', { className: 'op-hero-title' }, t('connTitle')),
-          ...connectParts),
+          ...connectParts,
+          sectionsBlock),
         h('div', { key: 'sync', className: 'op-hero-col' },
           h('h2', { className: 'op-hero-title' }, t('connSyncTitle')),
           h('div', { className: 'op-sync-stack' }, syncButton('push'), syncButton('pull')),
-          ...syncParts),
-        sectionsBlock)
+          ...syncParts,
+          scheduleBlock))
     }
 
     /* ------------------------------------------------------------------ */
@@ -1607,6 +1703,42 @@ window.__ModuleLoader__.load({
             onClick: onRefresh,
           }, history.loading ? Spinner() : h(RefreshIcon, { size: 14 }))),
         body)
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Footer                                                              */
+    /* ------------------------------------------------------------------ */
+
+    function PanelFooter({ t }) {
+      return h('footer', { className: 'op-foot' },
+        h('a', {
+          className: 'op-foot-link',
+          href: ISSUES_URL,
+          target: '_blank',
+          rel: 'noreferrer noopener',
+          title: t('feedback') + ' · ' + ISSUES_URL,
+          'aria-label': t('feedback') + ' · ' + ISSUES_URL,
+        }, h(FeedbackIcon, { size: 13 }), t('feedback')),
+        h('span', { className: 'op-foot-dev' },
+          h('span', { className: 'op-foot-dev-label' }, t('developedBy')),
+          h('img', {
+            className: 'op-foot-avatar',
+            src: 'https://github.com/' + AUTHOR_NAME + '.png?size=32',
+            alt: '',
+            width: 16,
+            height: 16,
+            loading: 'lazy',
+            draggable: false,
+            onError: (event) => { event.currentTarget.style.display = 'none' },
+          }),
+          h('a', {
+            className: 'op-foot-name',
+            href: AUTHOR_URL,
+            target: '_blank',
+            rel: 'noreferrer noopener',
+            title: AUTHOR_NAME + ' · ' + AUTHOR_URL,
+            'aria-label': AUTHOR_NAME + ' · ' + AUTHOR_URL,
+          }, AUTHOR_NAME)))
     }
 
     /* ------------------------------------------------------------------ */
@@ -1990,6 +2122,7 @@ window.__ModuleLoader__.load({
             canSync: canSync,
             busyDirection: previewBusy,
             error: syncError,
+            schedule: data ? data.schedule : null,
             sections: sections,
             sectionBusy: sectionBusy,
             onToggleSection: (name) => { void toggleSection(name) },
@@ -2022,7 +2155,8 @@ window.__ModuleLoader__.load({
                   disabled: refreshing,
                   onClick: () => { void refreshAll() },
                 }, refreshing ? Spinner() : h(RefreshIcon, { size: 14 }), refreshing ? t('refreshBusy') : t('refresh')))),
-            content)),
+            content,
+            h(PanelFooter, { t: t }))),
         dialog ? h(PreviewDialog, {
           t: t,
           state: dialog,
