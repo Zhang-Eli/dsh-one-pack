@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "One Pack",
+    "description": "把一个 DSH 环境的插件、设置、技能、会话与工作区文件打包同步到 GitHub，换机或换 profile 一键还原。"
+  }
+}

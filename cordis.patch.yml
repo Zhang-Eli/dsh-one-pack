@@ -1,0 +1,5 @@
+# One Pack bundle patch：把 One Pack 插入 profile 的层级栈。
+# 注意：顶层 `- id:` 只覆盖已存在条目，新增必须用 `insert:`。
+- insert:
+    - id: one-pack
+      name: 'dsh-one-pack'

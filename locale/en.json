@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "One Pack",
+    "description": "Pack a DSH environment's plugins, settings, skills, sessions and workspace files into a GitHub repository, then restore them on another machine or profile in one step."
+  }
+}
