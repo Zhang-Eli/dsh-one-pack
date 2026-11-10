@@ -10,13 +10,13 @@
  * No host internals are touched here and only `react` is required.
  */
 
-// A client bundle can reach the page twice: its own patch inserts it, and a
-// sidebar-style plugin can re-inject dsh-client-modules. The module loader
-// keys factories by id and throws on a duplicate registration, which aborts
-// web boot (every panel disappears). Guard the load call with a page-level flag.
-if (!window.__DSH_ONE_PACK_CLIENT_LOADED__) {
-window.__DSH_ONE_PACK_CLIENT_LOADED__ = true
-
+// A client bundle may execute more than once in one page. The module loader
+// keys factories by id and throws on a duplicate registration — but it also
+// invalidates the factory before an HMR reload re-executes the bundle at a new
+// revision URL. A page-level flag would swallow that re-execution too (the
+// loader then reports "loaded without registering" and drops the panel from the
+// live page), so only the duplicate-registration error itself is tolerated.
+try {
 window.__ModuleLoader__.load({
   id: 'dsh-one-pack',
   factory(require) {
@@ -2103,4 +2103,9 @@ window.__ModuleLoader__.load({
     }
   },
 })
+} catch (error) {
+  // A second evaluation without an invalidate (the bundle reached the page
+  // twice) is harmless: the factory is already registered. Any other error
+  // must keep propagating so real load failures stay visible.
+  if (!/duplicate factory registration/i.test(String((error && error.message) || error))) throw error
 }

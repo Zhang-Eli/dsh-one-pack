@@ -102,6 +102,15 @@ test('client half registers sidebar entry and main panel', () => {
   assert.ok(src.includes('/one-pack/api/'), 'client must call the plugin HTTP API')
   assert.ok(!/document\.body/.test(src), 'client must not touch document.body')
   assert.ok(!/<iframe/i.test(src), 'client must not use iframes')
+  // HMR safety: the loader invalidates the factory and re-executes the bundle at
+  // a new revision URL. A page-level "already loaded" flag would swallow that
+  // re-execution ("loaded without registering") and the live page drops the
+  // panel; only the duplicate-registration error itself may be tolerated.
+  assert.ok(
+    !src.includes('__DSH_ONE_PACK_CLIENT_LOADED__'),
+    'client must not use a page-level load flag (breaks HMR re-registration)',
+  )
+  assert.match(src, /duplicate factory registration/i, 'client must tolerate a duplicate-registration error only')
 })
 
 test('locale metadata and icon are present', () => {

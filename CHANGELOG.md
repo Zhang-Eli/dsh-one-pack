@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1
+
+修复 0.2.0 刷新/热更新后侧栏入口消失的问题。
+
+- client 半边不再使用页面级 `__DSH_ONE_PACK_CLIENT_LOADED__` 标志。该标志会让模块加载器在 HMR 失效重载（invalidated，随后以新 revision URL 重新执行）时认为「脚本已执行但未注册」，从而把面板从运行中的页面移除
+- 改为只忽略 `duplicate factory registration` 这一种重复注册错误（双份插入时避免拖垮 web boot），其它加载错误继续抛出
+- 新增回归断言：client.js 不得出现页面级标志、必须容忍重复注册错误；离线冒烟覆盖「重复求值」与「HMR 重注册」两条路径
+
 ## 0.2.0
 
 配置更省事：不用再手动去 GitHub 建仓、填 owner/repo。
