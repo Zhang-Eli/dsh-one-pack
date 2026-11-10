@@ -1,17 +1,17 @@
 {
   "name": "dsh-one-pack",
   "version": "0.3.3",
-  "description": "One Pack：把一个 DSH 环境的插件、设置、技能、会话与工作区文件打包同步到 GitHub，换机/换 profile 一键还原。",
+  "description": "One Pack：把一个 DSH 环境的插件、设置、技能、会话打包同步到 GitHub，换机/换 profile 一键还原。",
   "type": "module",
   "license": "MIT",
   "author": "One Pack contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/one-pack/dsh-one-pack.git"
+    "url": "git+https://github.com/Zhang-Eli/dsh-one-pack.git"
   },
-  "homepage": "https://github.com/one-pack/dsh-one-pack#readme",
+  "homepage": "https://github.com/Zhang-Eli/dsh-one-pack#readme",
   "bugs": {
-    "url": "https://github.com/one-pack/dsh-one-pack/issues"
+    "url": "https://github.com/Zhang-Eli/dsh-one-pack/issues"
   },
   "keywords": [
     "dsh",
@@ -42,7 +42,6 @@
     "locale/*.json",
     "icon.svg",
     "README.md",
-    "README.zh.md",
     "CHANGELOG.md",
     "LICENSE",
     "NOTICE"
