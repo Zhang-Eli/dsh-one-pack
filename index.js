@@ -21,8 +21,14 @@ const TOOL_ERROR_CODES = new Set([
   'INVALID_DIRECTION',
   'INVALID_SECTIONS',
   'INVALID_REPO',
+  'INVALID_REPO_NAME',
   'INVALID_BRANCH',
   'INVALID_FILES',
+  'INVALID_TOKEN',
+  'INVALID_PHASE',
+  'REPO_CREATE_FAILED',
+  'GITHUB_UNAUTHORIZED',
+  'GITHUB_FORBIDDEN',
   'NO_SECTIONS',
   'NO_PREVIEW',
   'PREVIEW_EXPIRED',
@@ -321,7 +327,7 @@ function makeTools(engine, store, ctx) {
     {
       name: 'one_pack_setup',
       description:
-        '配置 One Pack：GitHub 仓库（owner/repo）、分支、token（写入 credentials，不回显）、分区开关。只写本地配置，不触发同步。',
+        '配置 One Pack：GitHub 仓库（owner/repo）、分支、token（写入 credentials，不回显）、分区开关；createRepo=true 时在保存 token 后自动创建（或复用）该账号下的私有同步仓库。只写本地配置，不触发同步。',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -329,6 +335,11 @@ function makeTools(engine, store, ctx) {
           repo: { type: 'string', description: 'owner/repo 或 GitHub 仓库 URL；空字符串表示清除' },
           branch: { type: 'string', description: '分支名，默认 main' },
           token: { type: 'string', description: 'GitHub fine-grained/classic token（只写不读）' },
+          createRepo: {
+            type: 'boolean',
+            description:
+              '保存 token 后自动创建（或复用）私有同步仓库并写入 repo；需要 token 具备 repo（classic）或 Administration: write（fine-grained）权限',
+          },
           sections: {
             type: 'object',
             additionalProperties: false,
@@ -355,12 +366,20 @@ function makeTools(engine, store, ctx) {
           ...patch,
           sections: { ...current.sections, ...(patch.sections ?? {}) },
         }));
+        let autoCreated = null;
+        if (args.createRepo === true) {
+          autoCreated = await engine.autoCreateRepo({});
+        }
+        const current = autoCreated ? store.read() : next;
         const lines = [
           'One Pack 配置已更新',
-          `仓库：${next.repo || '（未配置）'} @ ${next.branch}`,
-          `分区：${sectionsLine(next)}`,
+          `仓库：${current.repo || '（未配置）'} @ ${current.branch}`,
+          `分区：${sectionsLine(current)}`,
         ];
         if ('token' in args) lines.push('Token：已写入 credentials（不回显）');
+        if (autoCreated) {
+          lines.push(autoCreated.created ? `私有仓库：已创建 ${autoCreated.repo}` : `私有仓库：复用已有 ${autoCreated.repo}`);
+        }
         return { text: lines.join('\n') };
       },
     },
@@ -483,6 +502,22 @@ export function apply(ctx) {
                 // 忽略
               }
               sendJson(res, 200, { ok: true, result: { hasToken: await engine.hasToken() } });
+              return;
+            }
+            if (method === 'POST' && sub === 'repo/auto') {
+              const body = await readBody(req);
+              let name;
+              if (body.name != null) {
+                name = String(body.name).trim();
+                if (!/^[A-Za-z0-9._-]{1,100}$/.test(name)) {
+                  throw new OnePackError(
+                    'INVALID_REPO_NAME',
+                    '仓库名只能包含字母、数字、点、下划线、短横线，最长 100 个字符',
+                  );
+                }
+              }
+              const result = await engine.autoCreateRepo({ name });
+              sendJson(res, 200, { ok: true, result });
               return;
             }
             if (method === 'POST' && sub === 'sync') {

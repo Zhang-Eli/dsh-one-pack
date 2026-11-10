@@ -139,6 +139,38 @@ test('apply() wires the HTTP API and agent tools', async () => {
     assert.equal(badRes.status, 400)
     assert.equal(JSON.parse(badRes.body).error.code, 'INVALID_REPO')
 
+    // POST repo/auto without a token -> typed NO_TOKEN (route exists, no network)
+    const autoRes = fakeResponse()
+    await routes[0].handler(
+      {
+        method: 'POST',
+        url: '/one-pack/api/repo/auto',
+        headers: {},
+        async *[Symbol.asyncIterator]() {
+          yield Buffer.from('{}')
+        },
+      },
+      autoRes,
+    )
+    assert.equal(autoRes.status, 400)
+    assert.equal(JSON.parse(autoRes.body).error.code, 'NO_TOKEN')
+
+    // invalid repo name is rejected before touching GitHub
+    const badName = fakeResponse()
+    await routes[0].handler(
+      {
+        method: 'POST',
+        url: '/one-pack/api/repo/auto',
+        headers: {},
+        async *[Symbol.asyncIterator]() {
+          yield Buffer.from(JSON.stringify({ name: 'bad name!' }))
+        },
+      },
+      badName,
+    )
+    assert.equal(badName.status, 400)
+    assert.equal(JSON.parse(badName.body).error.code, 'INVALID_REPO_NAME')
+
     // status tool returns human-readable text
     const statusTool = tools.find((tool) => tool.name === 'one_pack_status')
     const status = await statusTool.execute({})

@@ -26,6 +26,11 @@ window.__ModuleLoader__.load({
 
     const NS = 'dsh-one-pack'
     const API_BASE = '/one-pack/api/'
+    const TOKEN_URL = 'https://github.com/settings/tokens/new?scopes=repo&description=One%20Pack%20sync'
+
+    function openTokenPage() {
+      window.open(TOKEN_URL, '_blank', 'noopener,noreferrer')
+    }
 
     /* ------------------------------------------------------------------ */
     /* Sections                                                            */
@@ -103,6 +108,16 @@ window.__ModuleLoader__.load({
       tokenRemoved: 'Token 已移除',
       tokenSaveFailed: 'Token 操作失败',
       tokenHint: '需要仓库读写权限；仅在访问私有仓库时需要。',
+      tokenGenerate: '生成 Token ↗',
+      tokenGenerateHint:
+        '打开 GitHub 生成页：classic token 勾选 repo；fine-grained token 需要 Contents 读写 + Administration 读写（自动创建私有仓库用）。',
+      tokenInvalid: 'Token 无效或已过期，请重新生成后保存。',
+      repoAutoCreate: '自动创建私有仓库',
+      repoAutoCreating: '创建中…',
+      repoAutoHint: '保存 Token 后可一键在该账号下创建私有同步仓库，无需手动建仓。',
+      repoAutoCreated: '已创建私有仓库 {repo} 并设为同步仓库',
+      repoAutoExisting: '已使用现有私有仓库 {repo}',
+      repoAutoFailed: '自动创建仓库失败',
 
       sectionsTitle: '同步分区',
       sectionsHint: '打开的分区会被打包上传；关闭的分区不会出现在包里。',
@@ -268,6 +283,16 @@ window.__ModuleLoader__.load({
       tokenRemoved: 'Token removed',
       tokenSaveFailed: 'Token operation failed',
       tokenHint: 'Needs repository read/write access; only private repositories require it.',
+      tokenGenerate: 'Generate token ↗',
+      tokenGenerateHint:
+        'Opens the GitHub token page: tick repo for classic tokens; fine-grained tokens need Contents read/write plus Administration read/write (for auto-creating the private repository).',
+      tokenInvalid: 'The token is invalid or expired. Please generate a new one.',
+      repoAutoCreate: 'Create private repo',
+      repoAutoCreating: 'Creating…',
+      repoAutoHint: 'After saving a token you can create the private sync repository in one click — no manual GitHub setup.',
+      repoAutoCreated: 'Created private repository {repo} and set it as the sync target',
+      repoAutoExisting: 'Using existing private repository {repo}',
+      repoAutoFailed: 'Failed to create the repository automatically',
 
       sectionsTitle: 'Sync sections',
       sectionsHint: 'Enabled sections are packed and uploaded; disabled sections stay out of the package.',
@@ -1229,6 +1254,8 @@ window.__ModuleLoader__.load({
       const [tokenEdit, setTokenEdit] = useState(false)
       const [tokenConfirm, setTokenConfirm] = useState(false)
       const [tokenError, setTokenError] = useState(null)
+      const [autoBusy, setAutoBusy] = useState(false)
+      const [autoError, setAutoError] = useState(null)
       const dirtyRef = useRef(false)
       const confirmTimer = useRef(null)
 
@@ -1264,6 +1291,31 @@ window.__ModuleLoader__.load({
         }
       }
 
+      async function createRepoAutomatically() {
+        if (autoBusy) return
+        setAutoBusy(true)
+        setAutoError(null)
+        try {
+          const result = await api('repo/auto', { method: 'POST', body: {} }, t)
+          const repoValue = result && typeof result.repo === 'string' ? result.repo : ''
+          if (!repoValue) throw makeApiError('repo-create-failed', t('repoAutoFailed'))
+          dirtyRef.current = false
+          setRepo(repoValue)
+          setBranch((prev) => (prev && prev.trim() ? prev.trim() : 'main'))
+          props.pushToast(
+            'success',
+            result.created
+              ? t('repoAutoCreated', { repo: repoValue })
+              : t('repoAutoExisting', { repo: repoValue }),
+          )
+          props.onChanged()
+        } catch (err) {
+          setAutoError(errorMessage(t, err, 'repoAutoFailed'))
+        } finally {
+          setAutoBusy(false)
+        }
+      }
+
       async function saveToken() {
         const value = token.trim()
         if (value === '') {
@@ -1272,17 +1324,22 @@ window.__ModuleLoader__.load({
         }
         setTokenBusy(true)
         setTokenError(null)
+        setAutoError(null)
+        let autoRepo = false
         try {
           await api('token', { method: 'POST', body: { token: value } }, t)
           setToken('')
           setTokenEdit(false)
           props.pushToast('success', t('tokenSaved'))
           props.onChanged()
+          // 还没配置仓库时：保存 token 后直接自动建一个私有同步仓库
+          autoRepo = !(data && data.repo)
         } catch (err) {
           setTokenError(errorMessage(t, err, 'tokenSaveFailed'))
         } finally {
           setTokenBusy(false)
         }
+        if (autoRepo) await createRepoAutomatically()
       }
 
       async function removeToken() {
@@ -1356,12 +1413,26 @@ window.__ModuleLoader__.load({
             type: 'button',
             disabled: saving,
             onClick: () => { void saveConfig() },
-          }, saving ? Spinner() : null, saving ? t('saving') : t('configSave'))),
+          }, saving ? Spinner() : null, saving ? t('saving') : t('configSave')),
+          h('button', {
+            className: 'op-btn',
+            type: 'button',
+            disabled: saving || autoBusy || tokenBusy || !hasToken,
+            title: t('repoAutoHint'),
+            onClick: () => { void createRepoAutomatically() },
+          }, autoBusy ? Spinner() : null, autoBusy ? t('repoAutoCreating') : t('repoAutoCreate'))),
         error ? h('div', { className: 'op-hint', 'data-tone': 'error' }, error) : null,
+        autoError ? h('div', { className: 'op-hint', 'data-tone': 'error' }, autoError) : null,
         data && data.repoValid === false ? h('div', { className: 'op-hint', 'data-tone': 'warn' }, t('statusRepoInvalid')) : null,
         h('div', { className: 'op-divider' }),
         h('div', { className: 'op-inline' },
           h('span', { className: 'op-label', style: { flex: '1 1 auto' } }, t('tokenLabel')),
+          h('button', {
+            className: 'op-btn',
+            type: 'button',
+            title: t('tokenGenerateHint'),
+            onClick: openTokenPage,
+          }, t('tokenGenerate')),
           hasToken ? h('span', { className: 'op-chip', 'data-tone': 'success' }, t('statusTokenSet')) : h('span', { className: 'op-chip', 'data-tone': 'idle' }, t('statusTokenUnset'))),
         showTokenInput
           ? h(React.Fragment, null,
@@ -1414,7 +1485,8 @@ window.__ModuleLoader__.load({
                 onClick: () => { void removeToken() },
               }, tokenBusy ? Spinner() : null, tokenConfirm ? t('tokenDeleteConfirm') : t('tokenDelete'))),
         !showTokenInput && tokenConfirm ? h('div', { className: 'op-hint', 'data-tone': 'warn' }, t('tokenRemoveHint')) : null,
-        h('p', { className: 'op-hint', style: { margin: 0 } }, t('tokenHint')))
+        h('p', { className: 'op-hint', style: { margin: 0 } }, t('tokenHint')),
+        h('p', { className: 'op-hint', style: { margin: 0 } }, t('tokenGenerateHint')))
     }
 
     /* ------------------------------------------------------------------ */

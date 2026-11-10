@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0
+
+配置更省事：不用再手动去 GitHub 建仓、填 owner/repo。
+
+- 面板 Token 区新增「生成 Token ↗」按钮，直达 GitHub 预填 `repo` scope 的 token 生成页
+- 保存 token 后若尚未配置仓库，自动在 token 所属账号下创建（或复用）私有同步仓库 `dsh-one-pack-sync`，并写回仓库配置
+- 仓库行新增「自动创建私有仓库」按钮，可随时手动触发
+- 新增 `POST /one-pack/api/repo/auto` 与 `ensureSyncRepo()`；`one_pack_setup` 新增 `createRepo` 参数
+- 自动建仓遇到 401/403 时返回可操作的权限提示（classic 需要 `repo`，fine-grained 需要 `Administration: write`）
+- 新增 `test/repo.test.mjs`（建仓/复用/权限/写回 state）共 7 项，测试总数 42
+
 ## 0.1.0
 
 首个版本。

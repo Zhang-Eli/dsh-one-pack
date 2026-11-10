@@ -96,6 +96,10 @@ export class CloudRepo {
 }
 ```
 基于 `lib/vendor/github.mjs`（从 dsh-github-sync MIT 代码改造，保留版权头 + 仓库根 NOTICE）。
+自动建仓（v0.2）：`export const DEFAULT_REPO_NAME = 'dsh-one-pack-sync'`、
+`export async function ensureSyncRepo({ token, name?, client? }) -> { repo, login, name, created, private }`
+（`GET /user` 取 login → 查 /repos 存在则复用，不存在则 `POST /user/repos` 建私有空仓）；
+GitHubClient 新增 `userInfo()` / `repoMetaOrNull(owner,name)` / `createUserRepo({name,isPrivate,description})`。
 
 ### section 适配器（owner: host-sync，除 sessions）
 `lib/sections/plugins.mjs`、`settings.mjs`、`skills.mjs`、`files.mjs` 各自默认导出：
@@ -130,8 +134,9 @@ apply 后：`svc.workspaceRegistry.resolveByPath(header.cwd)`，无则 `create(h
 ### lib/orchestrator.mjs（owner: Lead）
 ```js
 export class SyncEngine {
-  constructor({ store, svc })
+  constructor({ store, svc, cloudFactory?, repoCreator? })  // 后两个仅测试注入
   async status()                       // -> { state(脱敏), hasToken, repoValid, pending:boolean, lastSync }
+  async autoCreateRepo({ name? })      // -> { repo, login, name, created, private }；写回 state.repo
   async preview(direction, opts)       // -> PreviewResult（含 token）
   async execute(direction, opts)       // -> ExecuteResult
 }
@@ -145,6 +150,8 @@ export class SyncEngine {
 - `GET  /status` → `engine.status()`
 - `POST /state` `{repo?,branch?,sections?,files?}` → 保存（不触发同步）
 - `POST /token` `{token}` → `credentials.set('ONE_PACK_GITHUB_TOKEN', token)`；`DELETE /token` → unset
+- `POST /repo/auto` `{name?}` → `engine.autoCreateRepo()`：用已保存 token 在所属账号下创建（或复用）私有同步仓库，写回 `state.repo`；
+  错误码 `NO_TOKEN` / `INVALID_REPO_NAME` / `GITHUB_UNAUTHORIZED` / `GITHUB_FORBIDDEN` / `REPO_CREATE_FAILED`
 - `POST /sync` `{direction:'push'|'pull', phase:'preview'|'execute', sections?, force?, token?}` → preview/execute 结果
 - `GET  /history?limit=20` → 历史
 - `GET  /sections` → 分区元信息（name/defaultEnabled/已启用）
@@ -153,11 +160,11 @@ export class SyncEngine {
 
 - `one_pack_status`（只读）：仓库、device、分区开关、最近同步、待执行 preview。
 - `one_pack_sync` `{direction, phase, sections?, force?, previewToken?}`。
-- `one_pack_setup` `{repo?, token?, branch?, sections?}`：写配置/凭据。
+- `one_pack_setup` `{repo?, token?, branch?, sections?, createRepo?}`：写配置/凭据；`createRepo=true` 时保存 token 后自动建私有仓库。
 
 ## 8. Web UI（owner: client-ui）
 
 侧栏 `sidebar.panellist`（id `one-pack`, order 30, label 来自 locale）+ `main` 面板（key `one-pack`）。
-面板：仓库/分支/Token 配置卡（token 输入后保存，显示 hasToken）、分区开关、Push/Pull 按钮 + preview 摘要对话框
+面板：仓库/分支/Token 配置卡（「生成 Token ↗」直达 GitHub 生成页；保存 token 后若未配仓库自动建私有仓库，另有手动「自动创建私有仓库」按钮；显示 hasToken）、分区开关、Push/Pull 按钮 + preview 摘要对话框
 （显示 items/warnings + 确认执行）、最近历史。全部中文文案走 locale（zh/en），颜色只用 `var(--dsw-alias-*)`。
 client.js 只需 fetch `/one-pack/api/*`，不碰 host 内部。

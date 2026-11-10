@@ -42,11 +42,11 @@ dsh plugin --profile desktop add dsh-one-pack
 ## 使用
 
 1. 侧栏打开 **One Pack**。
-2. 填仓库：`owner/repo`（私有仓库即可，首次 Push 会自动创建文件结构）。
-3. 填 GitHub token：建议 fine-grained token，只给目标仓库 `Contents: Read and write` 权限。
+2. 点 GitHub Token 旁的 **生成 Token ↗** 直达 GitHub 生成页：classic token 勾选 `repo`；fine-grained token 至少给目标仓库 `Contents: Read and write`，要自动建仓再加 `Administration: Read and write`。保存 token。
+3. 保存 token 后如果还没配置仓库，面板会**自动**在该账号下创建私有同步仓库 `dsh-one-pack-sync` 并填好仓库地址；已有同名仓库则直接复用。也可以点「自动创建私有仓库」手动触发，或改成自己的 `owner/repo`。
 4. 打开要同步的分区（默认是插件 + 设置）。
 5. 点 **Push** → 看预览摘要 → 确认执行。
-6. 到新机器：装 One Pack、填同一个仓库和 token → 点 **Pull** → 确认。
+6. 到新机器：装 One Pack、保存 token（同样会自动建仓/复用仓库）→ 点 **Pull** → 确认。
 
 也可以用 agent 工具：
 
@@ -54,7 +54,8 @@ dsh plugin --profile desktop add dsh-one-pack
 one_pack_status
 one_pack_sync { direction: "push", phase: "preview" }
 one_pack_sync { direction: "push", phase: "execute", previewToken: "..." }
-one_pack_setup  { repo: "me/dsh-pack", token: "github_pat_..." }
+one_pack_setup  { token: "github_pat_...", createRepo: true }
+one_pack_setup  { repo: "me/dsh-pack", branch: "main" }
 ```
 
 > Push / Pull 都是两段式：preview 只读并返回 10 分钟有效的 token，execute 必须带同一 token；
@@ -79,6 +80,7 @@ files/_index.json     files/<projectKey>/<rel>
 ## 安全
 
 - token 只进 DSH credentials（`ONE_PACK_GITHUB_TOKEN`），**永不写入仓库、永不返回给 Web 界面**。
+- 自动建仓只会在当前没有配置仓库（或你显式点按钮）时触发；同名私有仓库已存在时直接复用，**不会覆盖已有仓库**。
 - `settings` 导出时递归脱敏字段名匹配 `api_key / token / secret / password / credential / private_key / authorization / cookie` 的值（写成 `***`，pull 时不写回）。
 - `skills` / `files` 内置硬排除：`.env*`、`*.key/*.pem/*.pfx/*.p12`、`id_rsa`、`.npmrc`、`.netrc` 等；
   另有默认排除 `node_modules/.git/.idea/.vscode/__pycache__/*.log/*.tmp/*.bak`。
