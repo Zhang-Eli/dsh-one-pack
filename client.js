@@ -63,7 +63,7 @@ window.__ModuleLoader__.load({
     const ZH = {
       nav: 'One Pack',
       title: 'One Pack',
-      subtitle: '把插件、设置、技能、会话与工作区文件打包同步到 GitHub，换机一键还原。',
+      subtitle: '把插件、设置、技能、会话打包同步到 GitHub，换机一键还原。',
       refresh: '刷新',
       refreshBusy: '刷新中…',
       retry: '重试',
@@ -263,7 +263,7 @@ window.__ModuleLoader__.load({
     const EN = {
       nav: 'One Pack',
       title: 'One Pack',
-      subtitle: 'Pack plugins, settings, skills, sessions and workspace files into GitHub, then restore them anywhere.',
+      subtitle: 'Pack plugins, settings, skills and sessions into GitHub, then restore them anywhere.',
       refresh: 'Refresh',
       refreshBusy: 'Refreshing…',
       retry: 'Retry',
@@ -687,15 +687,16 @@ window.__ModuleLoader__.load({
 .op-btn-lg{height:34px;padding:0 14px}
 .op-sync-stack{display:flex;flex-direction:column;gap:8px}
 .op-status-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-label-secondary);min-width:0}
-.op-section-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px}
+.op-section-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px;flex:1 1 auto;grid-auto-rows:1fr}
 .op-section-grid .op-toggle-row{padding:8px 0}
 .op-sync-stack .op-sync-btn{flex:0 0 auto}
-.op-sections-block{display:flex;flex-direction:column;gap:8px;margin-top:4px;padding-top:12px;border-top:1px solid var(--dsw-alias-border-l2)}
+.op-sections-block{display:flex;flex:1 1 auto;flex-direction:column;gap:8px;margin-top:4px;padding-top:12px;border-top:1px dashed var(--dsw-alias-border-l2)}
 .op-hero>.op-sections-block{grid-column:1/-1}
 .op-sections-block .op-section-grid .op-toggle-row{padding:6px 0}
+.op-section-grid .op-toggle-row:last-child{border-bottom:1px dashed var(--dsw-alias-border-l2)}
 .op-warnbtn{font:inherit;font-size:11px;line-height:1.6;cursor:pointer}
 .op-hist-warn{display:flex;flex-direction:column;gap:2px;margin-top:4px;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-state-warn-primary);word-break:break-word}
-.op-schedule{display:flex;flex-direction:column;gap:6px;margin-top:6px;padding-top:10px;border-top:1px dashed var(--dsw-alias-border-l2)}
+.op-schedule{display:flex;flex-direction:column;gap:6px;margin-top:2px}
 .op-schedule-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
 .op-schedule-label{font-size:12.5px;font-weight:600}
 .op-time{height:30px;padding:0 8px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;outline:none}
