@@ -109,6 +109,7 @@ window.__ModuleLoader__.load({
       tokenSaveFailed: 'Token 操作失败',
       tokenHint: '需要仓库读写权限；仅在访问私有仓库时需要。',
       tokenGenerate: '生成 Token ↗',
+      tokenGenerateNew: '生成新 Token ↗',
       tokenGenerateHint:
         '打开 GitHub 生成页：classic token 勾选 repo；fine-grained token 需要 Contents 读写 + Administration 读写（自动创建私有仓库用）。',
       tokenInvalid: 'Token 无效或已过期，请重新生成后保存。',
@@ -195,6 +196,8 @@ window.__ModuleLoader__.load({
       historyEmpty: '还没有同步记录',
       historyFailed: '历史读取失败',
       historyWarnings: '{n} 条警告',
+      historySections: '分区：{list}',
+      listSep: '、',
       historyCommit: '提交 {sha}',
       historyDirectionPush: '推送',
       historyDirectionPull: '拉取',
@@ -300,6 +303,7 @@ window.__ModuleLoader__.load({
       tokenSaveFailed: 'Token operation failed',
       tokenHint: 'Needs repository read/write access; only private repositories require it.',
       tokenGenerate: 'Generate token ↗',
+      tokenGenerateNew: 'Generate new token ↗',
       tokenGenerateHint:
         'Opens the GitHub token page: tick repo for classic tokens; fine-grained tokens need Contents read/write plus Administration read/write (for auto-creating the private repository).',
       tokenInvalid: 'The token is invalid or expired. Please generate a new one.',
@@ -386,6 +390,8 @@ window.__ModuleLoader__.load({
       historyEmpty: 'No sync runs yet',
       historyFailed: 'Failed to load history',
       historyWarnings: '{n} warnings',
+      historySections: 'Sections: {list}',
+      listSep: ', ',
       historyCommit: 'commit {sha}',
       historyDirectionPush: 'Push',
       historyDirectionPull: 'Pull',
@@ -662,6 +668,12 @@ window.__ModuleLoader__.load({
 .op-status-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-label-secondary);min-width:0}
 .op-section-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px}
 .op-section-grid .op-toggle-row{padding:8px 0}
+.op-sync-stack .op-sync-btn{flex:0 0 auto}
+.op-sections-block{display:flex;flex-direction:column;gap:8px;margin-top:4px;padding-top:12px;border-top:1px solid var(--dsw-alias-border-l2)}
+.op-hero>.op-sections-block{grid-column:1/-1}
+.op-sections-block .op-section-grid .op-toggle-row{padding:6px 0}
+.op-warnbtn{font:inherit;font-size:11px;line-height:1.6;cursor:pointer}
+.op-hist-warn{display:flex;flex-direction:column;gap:2px;margin-top:4px;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-state-warn-primary);word-break:break-word}
 @media (max-width:820px){.op-hero{grid-template-columns:1fr}.op-section-grid{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){.op-overlay,.op-dialog,.op-toast,.op-btn,.op-sync-btn,.op-linkbtn,.op-spinner{animation:none;transition:none}}
 `
@@ -1120,6 +1132,7 @@ window.__ModuleLoader__.load({
         ok: ok,
         commitSha: asText(entry.commitSha || entry.sha || entry.commit),
         summary: entry.summary && typeof entry.summary === 'object' ? entry.summary : null,
+        sections: normalizeSectionNames(entry.sections),
         warnings: normalizeWarnings(entry.warnings),
         error: asText(entry.error && typeof entry.error === 'object' ? entry.error.message : entry.error),
       }
@@ -1248,6 +1261,7 @@ window.__ModuleLoader__.load({
       const t = props.t
       const data = props.data
       const canSync = props.canSync
+      const sections = props.sections || {}
       const [token, setToken] = useState('')
       const [tokenBusy, setTokenBusy] = useState(false)
       const [tokenEdit, setTokenEdit] = useState(false)
@@ -1255,15 +1269,7 @@ window.__ModuleLoader__.load({
       const [tokenError, setTokenError] = useState(null)
       const [autoBusy, setAutoBusy] = useState(false)
       const [autoError, setAutoError] = useState(null)
-      const [advanced, setAdvanced] = useState(false)
-      const [repoDraft, setRepoDraft] = useState(data && data.repo ? data.repo : '')
-      const [repoBusy, setRepoBusy] = useState(false)
-      const [repoError, setRepoError] = useState(null)
       const confirmTimer = useRef(null)
-
-      useEffect(() => {
-        if (!advanced) setRepoDraft(data && data.repo ? data.repo : '')
-      }, [data, advanced])
 
       useEffect(() => () => {
         if (confirmTimer.current !== null) window.clearTimeout(confirmTimer.current)
@@ -1277,7 +1283,6 @@ window.__ModuleLoader__.load({
           const result = await api('repo/auto', { method: 'POST', body: {} }, t)
           const repoValue = result && typeof result.repo === 'string' ? result.repo : ''
           if (!repoValue) throw makeApiError('repo-create-failed', t('repoAutoFailed'))
-          setRepoDraft(repoValue)
           props.pushToast(
             'success',
             result.created
@@ -1347,27 +1352,6 @@ window.__ModuleLoader__.load({
         }
       }
 
-      async function saveRepo() {
-        const value = repoDraft.trim()
-        if (value === '') {
-          setRepoError(t('repoRequired'))
-          return
-        }
-        setRepoBusy(true)
-        setRepoError(null)
-        try {
-          await api('state', { method: 'POST', body: { repo: value, branch: 'main' } }, t)
-          setRepoDraft(value)
-          setAdvanced(false)
-          props.pushToast('success', t('repoSaved'))
-          props.onChanged()
-        } catch (err) {
-          setRepoError(errorMessage(t, err, 'configSaveFailed'))
-        } finally {
-          setRepoBusy(false)
-        }
-      }
-
       const hasToken = !!(data && data.hasToken)
       const repoValue = data ? data.repo || '' : ''
       const repoValid = !data || data.repoValid !== false
@@ -1405,12 +1389,12 @@ window.__ModuleLoader__.load({
           }, tokenBusy ? Spinner() : null, tokenBusy ? t('saving') : t('connSave'))))
         connectParts.push(h('div', { className: 'op-inline' },
           h('button', { className: 'op-linkbtn', type: 'button', onClick: openTokenPage }, t('tokenGenerate')),
-          h('span', { className: 'op-hint' }, t('tokenHint'))))
+          h('span', { className: 'op-hint' }, t('tokenGenerateHint'))))
         if (tokenError) connectParts.push(h('div', { className: 'op-hint', 'data-tone': 'error' }, tokenError))
       } else if (tokenEdit) {
-        connectParts.push(h('p', { className: 'op-hint', style: { margin: 0 } }, t('tokenHint')))
         connectParts.push(h('div', { className: 'op-token-row' },
           tokenInput,
+          h('button', { className: 'op-linkbtn', type: 'button', disabled: tokenBusy, onClick: openTokenPage }, t('tokenGenerateNew')),
           h('button', {
             className: 'op-btn',
             'data-primary': '1',
@@ -1447,14 +1431,6 @@ window.__ModuleLoader__.load({
             disabled: autoBusy || tokenBusy,
             onClick: () => { void createRepoAutomatically() },
           }, autoBusy ? Spinner() : null, autoBusy ? t('connCreating') : t('connCreateRepo')))
-        } else {
-          actions.push(h('a', {
-            key: 'open',
-            className: 'op-linkbtn',
-            href: 'https://github.com/' + repoValue,
-            target: '_blank',
-            rel: 'noopener noreferrer',
-          }, t('connOpenRepo')))
         }
         actions.push(h('button', {
           key: 'edit',
@@ -1470,39 +1446,44 @@ window.__ModuleLoader__.load({
           disabled: tokenBusy,
           onClick: () => { void removeToken() },
         }, tokenConfirm ? t('tokenDeleteConfirm') : t('tokenDelete')))
-        actions.push(h('button', {
-          key: 'advanced',
-          className: 'op-linkbtn',
-          'data-muted': '1',
-          type: 'button',
-          onClick: () => setAdvanced((value) => !value),
-        }, advanced ? t('connAdvancedClose') : t('connAdvanced')))
         connectParts.push(h('div', { className: 'op-inline' }, actions))
 
-        if (advanced) {
-          connectParts.push(h('div', { className: 'op-token-row' },
-            h('input', {
-              className: 'op-input',
-              value: repoDraft,
-              placeholder: t('repoPlaceholder'),
-              spellCheck: false,
-              disabled: repoBusy,
-              onChange: (event) => setRepoDraft(event.target.value),
-            }),
-            h('button', {
-              className: 'op-btn',
-              'data-primary': '1',
-              type: 'button',
-              disabled: repoBusy,
-              onClick: () => { void saveRepo() },
-            }, repoBusy ? Spinner() : null, repoBusy ? t('saving') : t('save'))))
-          connectParts.push(h('p', { className: 'op-hint', style: { margin: 0 } }, t('connAdvancedHint')))
-          if (repoError) connectParts.push(h('div', { className: 'op-hint', 'data-tone': 'error' }, repoError))
-        }
         if (tokenConfirm) connectParts.push(h('div', { className: 'op-hint', 'data-tone': 'warn' }, t('tokenRemoveHint')))
         if (autoError) connectParts.push(h('div', { className: 'op-hint', 'data-tone': 'error' }, autoError))
         if (tokenError) connectParts.push(h('div', { className: 'op-hint', 'data-tone': 'error' }, tokenError))
       }
+
+      // Section toggles live under the connection block so the panel stays a
+      // single decision surface: connect once, choose what to carry, sync.
+      let enabledCount = 0
+      const sectionRows = []
+      for (let i = 0; i < SEC_META.length; i += 1) {
+        const meta = SEC_META[i]
+        const item = sections[meta.name] || { enabled: false, defaultEnabled: false }
+        if (item.enabled) enabledCount += 1
+        const busy = props.sectionBusy === meta.name
+        sectionRows.push(h('div', { className: 'op-toggle-row', key: meta.name },
+          h('button', {
+            type: 'button',
+            className: 'op-switch',
+            role: 'switch',
+            'aria-checked': item.enabled ? 'true' : 'false',
+            'aria-label': t(meta.label),
+            title: t('a11ySwitch'),
+            disabled: !!props.sectionBusy,
+            onClick: () => props.onToggleSection(meta.name),
+          }),
+          h('div', { className: 'op-toggle-body' },
+            h('div', { className: 'op-toggle-name' },
+              t(meta.label),
+              item.defaultEnabled ? h('span', { className: 'op-chip' }, t('sectionDefault')) : null,
+              busy ? Spinner() : null))))
+      }
+      const sectionsBlock = h('div', { className: 'op-sections-block' },
+        h('div', { className: 'op-inline', style: { justifyContent: 'space-between' } },
+          h('h2', { className: 'op-hero-title' }, t('sectionsTitle')),
+          h('span', { className: 'op-chip', 'data-tone': 'brand' }, t('sectionsEnabled', { on: enabledCount, total: SECTION_ORDER.length }))),
+        h('div', { className: 'op-section-grid' }, sectionRows))
 
       function syncButton(direction) {
         const isPush = direction === 'push'
@@ -1550,7 +1531,7 @@ window.__ModuleLoader__.load({
           }, t('syncPreviewRetry'))))
       }
 
-      const children = [
+      return h('section', { className: 'op-hero' },
         h('div', { key: 'connect', className: 'op-hero-col' },
           h('h2', { className: 'op-hero-title' }, t('connTitle')),
           ...connectParts),
@@ -1558,48 +1539,7 @@ window.__ModuleLoader__.load({
           h('h2', { className: 'op-hero-title' }, t('connSyncTitle')),
           h('div', { className: 'op-sync-stack' }, syncButton('push'), syncButton('pull')),
           ...syncParts),
-      ]
-      return h('section', { className: 'op-hero' }, children)
-    }
-
-    /* ------------------------------------------------------------------ */
-    /* Sections card                                                       */
-    /* ------------------------------------------------------------------ */
-
-    function SectionsCard({ t, sections, busyName, onToggle }) {
-      let enabledCount = 0
-      for (let i = 0; i < SECTION_ORDER.length; i += 1) {
-        if (sections[SECTION_ORDER[i]] && sections[SECTION_ORDER[i]].enabled) enabledCount += 1
-      }
-      const rows = []
-      for (let i = 0; i < SEC_META.length; i += 1) {
-        const meta = SEC_META[i]
-        const item = sections[meta.name] || { enabled: false, defaultEnabled: false }
-        const busy = busyName === meta.name
-        rows.push(h('div', { className: 'op-toggle-row', key: meta.name },
-          h('button', {
-            type: 'button',
-            className: 'op-switch',
-            role: 'switch',
-            'aria-checked': item.enabled ? 'true' : 'false',
-            'aria-label': t(meta.label),
-            title: t('a11ySwitch'),
-            disabled: !!busyName,
-            onClick: () => onToggle(meta.name),
-          }),
-          h('div', { className: 'op-toggle-body' },
-            h('div', { className: 'op-toggle-name' },
-              t(meta.label),
-              item.defaultEnabled ? h('span', { className: 'op-chip' }, t('sectionDefault')) : null,
-              busy ? Spinner() : null),
-            h('div', { className: 'op-toggle-desc' }, t(meta.desc)))))
-      }
-      return h('section', { className: 'op-card' },
-        h('div', { className: 'op-card-head' },
-          h('h2', { className: 'op-card-title' }, t('sectionsTitle')),
-          h('span', { className: 'op-chip', 'data-tone': 'brand' }, t('sectionsEnabled', { on: enabledCount, total: SECTION_ORDER.length }))),
-        h('p', { className: 'op-hint', style: { margin: 0 } }, t('sectionsHint')),
-        h('div', { className: 'op-section-grid' }, rows))
+        sectionsBlock)
     }
 
     /* ------------------------------------------------------------------ */
@@ -1607,6 +1547,7 @@ window.__ModuleLoader__.load({
     /* ------------------------------------------------------------------ */
 
     function HistoryCard({ t, history, onRefresh }) {
+      const [openWarn, setOpenWarn] = useState(-1)
       let body
       if (history.error) {
         body = h('div', { className: 'op-banner', 'data-tone': 'error' },
@@ -1619,10 +1560,12 @@ window.__ModuleLoader__.load({
       } else {
         body = h('div', { className: 'op-history' }, history.items.map((entry, index) => {
           const isPush = entry.direction === 'push'
-          const summaryLine = buildHistorySummary(t, entry.summary)
+          const sectionLabels = entry.sections.map((name) => sectionShort(t, name))
           const meta = []
-          if (summaryLine) meta.push(summaryLine)
+          if (sectionLabels.length > 0) meta.push(t('historySections', { list: sectionLabels.join(t('listSep')) }))
+          else meta.push(buildHistorySummary(t, entry.summary))
           if (entry.error) meta.push(entry.error)
+          const warnOpen = openWarn === index
           return h('div', { className: 'op-hist-row', key: entry.at + '-' + index },
             h('span', { className: 'op-dot', 'data-tone': entry.ok ? 'success' : 'error' }),
             h('div', { className: 'op-hist-main' },
@@ -1633,8 +1576,20 @@ window.__ModuleLoader__.load({
                   entry.ok ? t('ok') : t('failed')),
                 h('span', { className: 'op-muted' }, relativeTime(t, entry.at)),
                 entry.commitSha ? h('span', { className: 'op-chip op-mono' }, t('historyCommit', { sha: shortSha(entry.commitSha) })) : null,
-                entry.warnings.length > 0 ? h('span', { className: 'op-chip', 'data-tone': 'warn' }, t('historyWarnings', { n: entry.warnings.length })) : null),
-              meta.length > 0 ? h('div', { className: 'op-hist-meta' }, meta.join(' · ')) : null))
+                entry.warnings.length > 0
+                  ? h('button', {
+                      className: 'op-chip op-warnbtn',
+                      'data-tone': 'warn',
+                      type: 'button',
+                      'aria-expanded': warnOpen ? 'true' : 'false',
+                      title: entry.warnings.join('\n'),
+                      onClick: () => setOpenWarn(warnOpen ? -1 : index),
+                    }, t('historyWarnings', { n: entry.warnings.length }), warnOpen ? ' ▴' : ' ▾')
+                  : null),
+              meta.join(' · ') ? h('div', { className: 'op-hist-meta' }, meta.join(' · ')) : null,
+              warnOpen && entry.warnings.length > 0
+                ? h('div', { className: 'op-hist-warn' }, entry.warnings.map((text, warnIndex) => h('span', { key: warnIndex }, text)))
+                : null))
         }))
       }
       return h('section', { className: 'op-card' },
@@ -2033,22 +1988,18 @@ window.__ModuleLoader__.load({
             canSync: canSync,
             busyDirection: previewBusy,
             error: syncError,
+            sections: sections,
+            sectionBusy: sectionBusy,
+            onToggleSection: (name) => { void toggleSection(name) },
             onPreview: (direction) => { void runPreview(direction) },
             pushToast: pushToast,
             onChanged: () => { void loadStatus(false) },
           }),
-          h('div', { className: 'op-grid' },
-            h(SectionsCard, {
-              t: t,
-              sections: sections,
-              busyName: sectionBusy,
-              onToggle: (name) => { void toggleSection(name) },
-            }),
-            h(HistoryCard, {
-              t: t,
-              history: history,
-              onRefresh: () => { void loadHistory(false) },
-            })))
+          h(HistoryCard, {
+            t: t,
+            history: history,
+            onRefresh: () => { void loadHistory(false) },
+          }))
       }
 
       return h(React.Fragment, null,
