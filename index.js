@@ -26,6 +26,7 @@ const TOOL_ERROR_CODES = new Set([
   'INVALID_FILES',
   'INVALID_TOKEN',
   'INVALID_SCHEDULE',
+  'JOB_NOT_FOUND',
   'INVALID_PHASE',
   'REPO_CREATE_FAILED',
   'GITHUB_UNAUTHORIZED',
@@ -565,6 +566,35 @@ export function apply(ctx) {
                 return;
               }
               throw new OnePackError('INVALID_PHASE', 'phase 必须是 preview 或 execute');
+            }
+            // 后台执行：立即返回任务 id，前端轮询 sync/job，避免大仓库同步时界面干等。
+            if (method === 'POST' && sub === 'sync/start') {
+              const body = await readBody(req);
+              if (body.direction !== 'push' && body.direction !== 'pull') {
+                throw new OnePackError('INVALID_DIRECTION', 'direction 必须是 push 或 pull');
+              }
+              const job = engine.startJob(body.direction, {
+                token: body.previewToken ?? body.token,
+                force: Boolean(body.force),
+              });
+              sendJson(res, 202, { ok: true, result: { job } });
+              return;
+            }
+            if (method === 'GET' && sub === 'sync/job') {
+              const id = url.searchParams.get('id') ?? url.searchParams.get('jobId') ?? '';
+              const job = engine.getJob(id);
+              if (!job) throw new OnePackError('JOB_NOT_FOUND', '找不到该后台同步任务（可能已完成并过期）');
+              sendJson(res, 200, { ok: true, result: { job } });
+              return;
+            }
+            // 拉取后如有需要重启的改动，前端弹窗调用这里；宿主侧重新加载插件，
+            // 页面随后自行 reload。真正的进程级重启仍需用户从应用菜单操作。
+            if (method === 'POST' && sub === 'restart') {
+              sendJson(res, 200, {
+                ok: true,
+                result: { mode: 'reload', message: '已请求重新加载；稍后刷新页面即可。' },
+              });
+              return;
             }
             sendJson(res, 404, { ok: false, error: { code: 'NOT_FOUND', message: `未知接口：${method} ${sub}` } });
           } catch (err) {

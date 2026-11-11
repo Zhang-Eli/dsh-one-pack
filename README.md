@@ -15,12 +15,14 @@
 | 已装插件 `plugins` | 开 | 已安装 bundle 的安装规格、版本、启停状态；已挂载条目的启停 | `pluginManager.installBundle()` / `setBundleEnabled()` / `setPluginEnabled()` |
 | 设置 `settings` | 开 | `configEditor` 里每个条目的**显式用户覆盖**（DSH 设置 + 插件设置都在这里），敏感字段自动脱敏 | 按条目 id `configEditor.edit()` |
 | 技能 `skills` | 关 | `$DSH_HOME/skills/**` | 备份后覆盖写，不删除本地多余技能 |
-| 会话 `sessions` | 关 | `session.v4.jsonl.zstd` + 被引用附件 + 工作区注册信息 | 改 header.cwd → 落盘 → 注册 workspace，body 前缀比较、分叉另存 |
+| 会话 `sessions` | 关 | `session.v4.jsonl.zstd` + 被引用附件 + 工作区注册信息 | 改 header.cwd → 落盘 → **自动挂载到工作区**（已存在但未挂载的会话也会补挂）；body 前缀比较、分叉另存 |
 | 工作区文件 `files` | 关 | 你显式登记的目录 | 还原到原 cwd，冲突另存 `.remote-<时间戳><扩展名>` |
 
 所有分区都能单独开关，也可以在一次同步里只选部分分区（工具参数 `sections`）。
 
 面板还支持**定时推送**：默认关闭，打开后每天 18:00（本地时间）自动 Push 一次，时间可改。定时任务在 DSH 运行时每 30 秒检查一次，当天已跑过不重复，过点后首次启动会补跑一次；失败原因会显示在同步区并记录在 state 里。
+
+推送/拉取确认后会转到**后台执行**：面板顶部出现「后台同步中」chip，你可以继续用 DSH，完成后用 toast 汇报结果。拉取如果包含需要重启才生效的内容，会弹窗询问「立即重启 / 好的」（立即重启 = 重新加载页面；仍不生效时请从应用菜单重启 DSH）。
 
 ## 安装
 
@@ -47,9 +49,9 @@ dsh plugin --profile desktop add dsh-one-pack
 2. 点 GitHub Token 旁的 **生成 Token ↗** 直达 GitHub 生成页：classic token 勾选 `repo`；fine-grained token 至少给目标仓库 `Contents: Read and write`，要自动建仓再加 `Administration: Read and write`。保存 token。
 3. 保存 token 后如果还没配置仓库，面板会**自动**在该账号下创建私有同步仓库 `dsh-one-pack-sync` 并填好仓库地址；已有同名仓库则直接复用。也可以点「自动创建私有仓库」手动触发，或改成自己的 `owner/repo`。
 4. 打开要同步的分区（默认是插件 + 设置）。
-5. 点 **Push** → 看预览摘要 → 确认执行。
+5. 点 **Push** → 看预览摘要 → 确认执行（随后在后台运行，界面不阻塞）。
 6. 可选：在同步区打开「自动推送」，调整每天自动推送的时间。
-7. 到新机器：装 One Pack、保存 token（同样会自动建仓/复用仓库）→ 点 **Pull** → 确认。
+7. 到新机器：装 One Pack、保存 token（同样会自动建仓/复用仓库）→ 点 **Pull** → 确认；拉取到的会话会直接出现在对应工作区里。
 
 也可以用 agent 工具：
 
@@ -63,7 +65,8 @@ one_pack_setup  { repo: "me/dsh-pack", branch: "main" }
 
 > 定时推送只在 DSH 运行时生效（不是系统级计划任务）；没有变更时不会产生提交。
 > Push / Pull 都是两段式：preview 只读并返回 10 分钟有效的 token，execute 必须带同一 token；
-> Pull 落地前会把将被覆盖的数据备份到 `$DSH_HOME/one-pack/backups/<时间戳>/`。
+> Pull 落地前会把将被覆盖的数据备份到 `$DSH_HOME/one-pack/backups/<时间戳>/`；
+> 同步在后台任务中执行，可用 `GET /one-pack/api/sync/job?id=<jobId>` 查询进度。
 
 ## 远端仓库结构
 

@@ -155,6 +155,9 @@ export class SyncEngine {
 - `POST /sync` `{direction:'push'|'pull', phase:'preview'|'execute', sections?, force?, token?}` → preview/execute 结果
 - `POST /schedule` `{enabled?, time?, direction?}` → `engine.updateSchedule()`，保存每天定时推送设置（`time` 为 `HH:MM` 本地时间）；
   错误码 `INVALID_SCHEDULE`。`GET /status` 额外返回 `schedule:{enabled,time,direction,lastRunAt,lastOk,lastError}`
+- `POST /sync/start` `{direction:'push'|'pull', token, force?}` → 202 `{job}`：后台执行一次 execute（消费 preview token），立即返回任务 id
+- `GET  /sync/job?id=<jobId>` → `{job:{id,direction,status:'running'|'done'|'failed',startedAt,finishedAt,result,error}}`；未知 id → `JOB_NOT_FOUND`
+- `POST /restart` → 200 `{mode:'reload'}`：客户端收到后刷新页面（One Pack 不做进程级重启）
 - `GET  /history?limit=20` → 历史
 - `GET  /sections` → 分区元信息（name/defaultEnabled/已启用）
 
@@ -171,7 +174,9 @@ export class SyncEngine {
 - 顶部 hero 卡：左列连接区（未保存 token 时只有一个 Token 输入框 +「保存并创建仓库」，保存后自动建私有仓库；已连接时只显示仓库名、设备，以及「更换 Token / 移除 Token」文字操作，未建仓时显示「创建私有仓库」），连接操作下方是 5 个同步分区开关（开关 + 名称 + 默认标记，无独立卡框、无说明小字）；右列同步区（推送/拉取两个紧凑主按钮 + 上次同步 + 定时推送开关与时间 + 连接就绪/需配置提示）。
 - hero 卡底部：`PanelFooter` 页脚——左侧「反馈问题」链接（GitHub issues），右侧「Developed by Zhang-Eli」+ GitHub 头像（加载失败自动隐藏）。
 - 下方最近历史：每条显示方向/结果/时间/commit，副标题为本次同步的分区列表；告警数量可点击展开全文。
-- preview 摘要对话框保留（items/warnings + 确认执行）。全部文案走 locale（zh/en），颜色只用 `var(--dsw-alias-*)`。
+- preview 摘要对话框保留（items/warnings + 确认执行）；确认后改走 `POST /sync/start`，面板不阻塞，顶部显示「后台同步中」chip，`pollJob` 轮询 `GET /sync/job`，完成后 toast + 刷新状态/历史。
+- 拉取结果 `applied.restartRequired` 为 true 时弹 `RestartDialog`（立即重启 / 好的）；「立即重启」先 `POST /restart` 再 `location.reload()`。拉取结果含会话导入时额外提示「已导入 N 个会话到工作区」。
+- 全部文案走 locale（zh/en），颜色只用 `var(--dsw-alias-*)`。
 - 错误边界 `PanelBoundary` 包住整个面板，渲染异常只显示错误卡片 + 重试，不再黑屏。
 client.js 只需 fetch `/one-pack/api/*`，不碰 host 内部。
 host 侧 `lib/schedule.mjs` 提供 `normalizeSchedule` / `isScheduleDue` / `nextRunAt`；`index.js` 用 `ctx.effect` 内的 30s 定时器 + 启动 8s 预热调用 `engine.tickSchedule()`（gate 探针不执行 effect 回调，因此门禁子进程不会遗留计时器）。

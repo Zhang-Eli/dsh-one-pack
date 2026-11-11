@@ -146,6 +146,16 @@ window.__ModuleLoader__.load({
       scheduleLabel: '自动推送',
       scheduleHint: '每天 {time} 自动推送一次（DSH 运行时生效）。',
       scheduleError: '定时设置保存失败',
+      bgRunning: '后台同步中…',
+      bgStarted: '已在后台开始{action}，可以继续使用 DSH，完成后会在这里提示。',
+      bgFailed: '后台同步失败',
+      actionPush: '推送',
+      actionPull: '拉取',
+      importedSessions: '已导入 {count} 个会话到工作区',
+      restartTitle: '需要重启才能生效',
+      restartBody: '本次同步更新了插件或设置。点「立即重启」会重新加载界面；若仍有内容未生效，请关闭并重新打开 DSH。',
+      restartNow: '立即重启',
+      restartLater: '好的',
       feedback: '反馈问题',
       developedBy: 'Developed by',
       connDevice: '设备 {device}',
@@ -346,6 +356,16 @@ window.__ModuleLoader__.load({
       scheduleLabel: 'Auto push',
       scheduleHint: 'Pushes once a day at {time} while DSH is running.',
       scheduleError: 'Could not save schedule',
+      bgRunning: 'Syncing in background…',
+      bgStarted: 'Started {action} in the background — you can keep using DSH; you will be notified here when it finishes.',
+      bgFailed: 'Background sync failed',
+      actionPush: 'push',
+      actionPull: 'pull',
+      importedSessions: 'Imported {count} session(s) into the workspace',
+      restartTitle: 'Restart needed to apply changes',
+      restartBody: 'This sync updated plugins or settings. “Restart now” reloads the interface; if something still does not apply, close and reopen DSH.',
+      restartNow: 'Restart now',
+      restartLater: 'OK',
       feedback: 'Feedback',
       developedBy: 'Developed by',
       connDevice: 'Device {device}',
@@ -1907,6 +1927,24 @@ window.__ModuleLoader__.load({
     /* Panel                                                               */
     /* ------------------------------------------------------------------ */
 
+    function RestartDialog({ t, onNow, onLater }) {
+      return h('div', {
+        className: 'op-overlay',
+        role: 'dialog',
+        'aria-modal': 'true',
+        'aria-label': t('restartTitle'),
+        onClick: onLater,
+      },
+        h('div', { className: 'op-dialog', style: { maxWidth: '440px' }, onClick: (event) => { event.stopPropagation() } },
+          h('div', { className: 'op-dialog-head' },
+            h('h2', { className: 'op-dialog-title' }, t('restartTitle'))),
+          h('div', { className: 'op-dialog-body' },
+            h('p', { style: { margin: 0, lineHeight: 1.6 } }, t('restartBody'))),
+          h('div', { className: 'op-dialog-foot' },
+            h('button', { className: 'op-btn', type: 'button', onClick: onLater }, t('restartLater')),
+            h('button', { className: 'op-btn', type: 'button', 'data-primary': 'true', onClick: onNow }, t('restartNow')))))
+    }
+
     function OnePackPanel(rawProps) {
       const props = rawProps || {}
       const t = pickT(props.t)
@@ -1919,6 +1957,8 @@ window.__ModuleLoader__.load({
       const [previewBusy, setPreviewBusy] = useState(null)
       const [syncError, setSyncError] = useState(null)
       const [dialog, setDialog] = useState(null)
+      const [bgJob, setBgJob] = useState(null)
+      const [restartPrompt, setRestartPrompt] = useState(false)
       const [toasts, setToasts] = useState([])
 
       const tRef = useRef(t)
@@ -2064,14 +2104,18 @@ window.__ModuleLoader__.load({
         const force = !!dialog.force
         setDialog((current) => (current ? Object.assign({}, current, { busy: true, error: null, errorCode: null }) : current))
         try {
-          const body = { direction: direction, phase: 'execute', token: previewToken }
+          // 执行放到宿主后台任务：界面立即恢复可用，通过轮询拿结果。
+          const body = { direction: direction, token: previewToken }
           if (force) body.force = true
-          const raw = await api('sync', { method: 'POST', body: body }, t)
-          const outcome = normalizeOutcome(raw)
+          const started = await api('sync/start', { method: 'POST', body: body }, t)
+          const startedJob = started && started.job ? started.job : started
+          const jobId = startedJob && startedJob.id ? startedJob.id : ''
           setDialog(null)
-          pushToast('success', buildSuccessText(t, outcome))
-          void loadStatus(false)
-          void loadHistory(false)
+          if (!jobId) throw Object.assign(new Error(t('bgFailed')), { code: 'JOB_START_FAILED' })
+          pushToast('warn', interpolate(t('bgStarted'), {
+            action: direction === 'push' ? t('actionPush') : t('actionPull'),
+          }))
+          void pollJob(jobId, direction)
         } catch (error) {
           const code = error && error.code ? error.code : ''
           if (code === 'REMOTE_AHEAD') {
@@ -2107,6 +2151,70 @@ window.__ModuleLoader__.load({
               })
             : current))
         }
+      }
+
+      function handleOutcome(raw, direction) {
+        const outcome = normalizeOutcome(raw)
+        setSyncError(null)
+        pushToast('success', buildSuccessText(t, outcome))
+        const imported = outcome.applied && outcome.applied.sessions && Number(outcome.applied.sessions.imported)
+        if (Number.isFinite(imported) && imported > 0) {
+          pushToast('success', interpolate(t('importedSessions'), { count: imported }))
+        }
+        if (outcome.applied && outcome.applied.restartRequired === true) setRestartPrompt(true)
+        void loadStatus(false)
+        void loadHistory(false)
+        void direction
+      }
+
+      async function pollJob(jobId, direction) {
+        setBgJob({ id: jobId, direction: direction })
+        const deadline = Date.now() + 15 * 60 * 1000
+        let delay = 900
+        try {
+          while (Date.now() < deadline) {
+            await new Promise((resolve) => window.setTimeout(resolve, delay))
+            delay = Math.min(delay + 400, 3000)
+            let job = null
+            try {
+              const raw = await api('sync/job?id=' + encodeURIComponent(jobId), {}, tRef.current)
+              const payload = raw && raw.job ? raw.job : raw
+              job = payload && typeof payload === 'object' ? payload : null
+            } catch (error) {
+              if (error && error.code === 'JOB_NOT_FOUND') {
+                pushToast('error', tRef.current('bgFailed'))
+                return
+              }
+              continue
+            }
+            if (!job) continue
+            if (job.status === 'done') {
+              handleOutcome(job.result, direction)
+              return
+            }
+            if (job.status === 'failed') {
+              const message = job.error && job.error.message ? job.error.message : tRef.current('bgFailed')
+              setSyncError({ message: message, code: (job.error && job.error.code) || '', direction: direction })
+              pushToast('error', message)
+              return
+            }
+          }
+          pushToast('error', tRef.current('bgFailed'))
+        } finally {
+          setBgJob(null)
+        }
+      }
+
+      async function applyRestart() {
+        setRestartPrompt(false)
+        try {
+          await api('restart', { method: 'POST', body: {} }, t)
+        } catch (error) {
+          /* 即使宿主没接受，也继续刷新页面 */
+        }
+        window.setTimeout(() => {
+          try { window.location.reload() } catch (error) { /* ignore */ }
+        }, 300)
       }
 
       let content
@@ -2155,6 +2263,7 @@ window.__ModuleLoader__.load({
                   h('p', { className: 'op-sub' }, t('subtitle')))),
               h('div', { className: 'op-head-actions' },
                 data && data.pending ? h('span', { className: 'op-chip', 'data-tone': 'warn' }, t('statusPending')) : null,
+                bgJob ? h('span', { className: 'op-chip', 'data-tone': 'brand' }, Spinner(), t('bgRunning')) : null,
                 h('button', {
                   className: 'op-btn',
                   type: 'button',
@@ -2175,6 +2284,11 @@ window.__ModuleLoader__.load({
             setDialog(null)
             void runPreview(direction)
           },
+        }) : null,
+        restartPrompt ? h(RestartDialog, {
+          t: t,
+          onNow: () => { void applyRestart() },
+          onLater: () => setRestartPrompt(false),
         }) : null,
         h(ToastStack, { t: t, toasts: toasts, onDismiss: dismissToast }))
     }

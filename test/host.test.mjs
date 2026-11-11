@@ -210,6 +210,64 @@ test('apply() wires the HTTP API and agent tools', async () => {
     assert.equal(statusAfterSchedule.status, 200)
     assert.equal(JSON.parse(statusAfterSchedule.body).result.schedule.enabled, true)
 
+    // background sync start/job plumbing: no token -> the job fails, UI can poll it
+    const startRes = fakeResponse()
+    await routes[0].handler(
+      {
+        method: 'POST',
+        url: '/one-pack/api/sync/start',
+        headers: {},
+        async *[Symbol.asyncIterator]() {
+          yield Buffer.from(JSON.stringify({ direction: 'push', token: 'preview-token' }))
+        },
+      },
+      startRes,
+    )
+    assert.equal(startRes.status, 202)
+    const job = JSON.parse(startRes.body).result.job
+    assert.ok(job.id)
+    assert.equal(job.direction, 'push')
+    assert.ok(['running', 'done', 'failed'].includes(job.status))
+
+    let polled = null
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const pollRes = fakeResponse()
+      await routes[0].handler(
+        { method: 'GET', url: '/one-pack/api/sync/job?id=' + encodeURIComponent(job.id), headers: {} },
+        pollRes,
+      )
+      assert.equal(pollRes.status, 200)
+      polled = JSON.parse(pollRes.body).result.job
+      if (polled.status !== 'running') break
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    assert.equal(polled.status, 'failed')
+    assert.equal(polled.error.code, 'PREVIEW_EXPIRED', 'background start still honours the one-shot preview token')
+
+    const missingJob = fakeResponse()
+    await routes[0].handler(
+      { method: 'GET', url: '/one-pack/api/sync/job?id=job-nope', headers: {} },
+      missingJob,
+    )
+    assert.equal(missingJob.status, 400)
+    assert.equal(JSON.parse(missingJob.body).error.code, 'JOB_NOT_FOUND')
+
+    // restart endpoint acknowledges the reload request
+    const restartRes = fakeResponse()
+    await routes[0].handler(
+      {
+        method: 'POST',
+        url: '/one-pack/api/restart',
+        headers: {},
+        async *[Symbol.asyncIterator]() {
+          yield Buffer.from('{}')
+        },
+      },
+      restartRes,
+    )
+    assert.equal(restartRes.status, 200)
+    assert.equal(JSON.parse(restartRes.body).result.mode, 'reload')
+
     // status tool returns human-readable text
     const statusTool = tools.find((tool) => tool.name === 'one_pack_status')
     const status = await statusTool.execute({})

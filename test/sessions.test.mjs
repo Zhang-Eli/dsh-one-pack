@@ -412,6 +412,7 @@ test('applyPull：写会话（备份 + attach）、fork 另存、附件内容寻
     assert.equal(result.applied.forked, 1);
     assert.equal(result.applied.attachments, 1);
     assert.equal(result.applied.backups.length, 1, '覆盖本地前必须备份一次');
+    assert.equal(result.applied.imported, 2, '写入/分叉的会话都要挂到工作区');
 
     // sess-ahead：头帧 cwd 换成目标 cwd，body 与远端一致
     const writtenFile = join(dsh, 'sessions', project, 'sess-ahead', SESSION_FILE);
@@ -444,7 +445,7 @@ test('applyPull：写会话（备份 + attach）、fork 另存、附件内容寻
     // 工作区注册：resolveByPath 命中已有工作区后 attachSession
     assert.deepEqual(registry.calls.resolve, [cwd]);
     assert.equal(registry.calls.create.length, 0);
-    assert.deepEqual(registry.calls.attach, ['sess-ahead'], '只有 write 的会话需要挂载');
+    assert.deepEqual(registry.calls.attach.slice().sort(), ['sess-ahead', 'sess-fork'], '写入与分叉会话都要挂载');
     assert.ok(result.warnings.some((w) => w.includes('分叉')));
   });
 });
@@ -601,4 +602,43 @@ test('默认导出符合 sessions 适配器契约', () => {
   assert.equal(typeof applyPull, 'function');
   assert.equal(typeof planPull, 'function');
   assert.equal(typeof exportSessions, 'function');
+});
+
+test('applyPull：内容相同的会话（skip）也会补挂到工作区', async () => {
+  await withDshHome(async (dsh) => {
+    const cwd = join(dsh, 'ws-gamma');
+    mkdirSync(cwd, { recursive: true });
+    const project = projectKey(cwd);
+    const e1 = line('user/message', { text: 'same-body' });
+
+    // 本地已有同 body（cwd 不同）的会话：plan 判 equal -> skip
+    const localBuf = makeSession({ id: 'sess-same', cwd, frames: [e1] });
+    writeLocalSession(dsh, cwd, 'sess-same', localBuf);
+    const remoteBuf = makeSession({ id: 'sess-same', cwd: 'D:/remote/other', frames: [e1] });
+    const index = {
+      schema: 1,
+      updatedAt: '2026-01-03T00:00:00.000Z',
+      device: { id: 'dev-remote', name: 'remote-host', platform: 'darwin' },
+      projects: { [project]: { originalCwd: cwd, title: 'Gamma' } },
+      sessions: {
+        'sess-same': { project, title: 'Same', bodySha: sha256(sessionBody(remoteBuf)), bytes: remoteBuf.length, updatedAt: '2026-01-03T00:00:00.000Z' },
+      },
+      attachments: {},
+    };
+    const remote = mockRemote([
+      { path: INDEX_PATH, content: JSON.stringify(index) },
+      { path: `sessions/${project}/sess-same.jsonl.zstd`, content: remoteBuf },
+    ]);
+
+    const registry = makeRegistry([{ path: cwd, title: 'Gamma' }]);
+    const ctx = makeCtx(registry);
+    const plan = await planPull(ctx, remote);
+    assert.equal(plan.summary.import, 1, 'skip 的会话应计入待导入');
+
+    const result = await applyPull(ctx, remote, plan);
+    assert.equal(result.applied.sessions, 0);
+    assert.equal(result.applied.imported, 1);
+    assert.deepEqual(registry.calls.attach, ['sess-same']);
+    assert.ok(readFileSync(join(dsh, 'sessions', project, 'sess-same', SESSION_FILE)).equals(localBuf), 'skip 不应改写本地文件');
+  });
 });
