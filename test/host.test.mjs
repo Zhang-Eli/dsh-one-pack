@@ -252,6 +252,22 @@ test('apply() wires the HTTP API and agent tools', async () => {
     assert.equal(missingJob.status, 400)
     assert.equal(JSON.parse(missingJob.body).error.code, 'JOB_NOT_FOUND')
 
+    // discarding a waiting preview is idempotent and touches nothing remote
+    const discardRes = fakeResponse()
+    await routes[0].handler(
+      {
+        method: 'POST',
+        url: '/one-pack/api/sync/discard',
+        headers: {},
+        async *[Symbol.asyncIterator]() {
+          yield Buffer.from('{}')
+        },
+      },
+      discardRes,
+    )
+    assert.equal(discardRes.status, 200)
+    assert.equal(JSON.parse(discardRes.body).result.discarded, 0)
+
     // restart endpoint acknowledges the reload request
     const restartRes = fakeResponse()
     await routes[0].handler(

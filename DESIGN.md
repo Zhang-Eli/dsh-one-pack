@@ -157,6 +157,7 @@ export class SyncEngine {
   错误码 `INVALID_SCHEDULE`。`GET /status` 额外返回 `schedule:{enabled,time,direction,lastRunAt,lastOk,lastError}`
 - `POST /sync/start` `{direction:'push'|'pull', token, force?}` → 202 `{job}`：后台执行一次 execute（消费 preview token），立即返回任务 id
 - `GET  /sync/job?id=<jobId>` → `{job:{id,direction,status:'running'|'done'|'failed',startedAt,finishedAt,result,error}}`；未知 id → `JOB_NOT_FOUND`
+- `POST /sync/discard` `{token?}` → 丢弃未执行的预览（不带 token 清空全部），返回 `{discarded}`
 - `POST /restart` → 200 `{mode:'reload'}`：客户端收到后刷新页面（One Pack 不做进程级重启）
 - `GET  /history?limit=20` → 历史
 - `GET  /sections` → 分区元信息（name/defaultEnabled/已启用）

@@ -580,6 +580,12 @@ export function apply(ctx) {
               sendJson(res, 202, { ok: true, result: { job } });
               return;
             }
+            if (method === 'POST' && sub === 'sync/discard') {
+              const body = await readBody(req);
+              const discarded = engine.discardPreview(body.token ?? '');
+              sendJson(res, 200, { ok: true, result: { discarded } });
+              return;
+            }
             if (method === 'GET' && sub === 'sync/job') {
               const id = url.searchParams.get('id') ?? url.searchParams.get('jobId') ?? '';
               const job = engine.getJob(id);

@@ -83,6 +83,8 @@ window.__ModuleLoader__.load({
 
       statusTitle: '状态',
       statusPending: '有未执行的计划',
+      statusPendingHint: '点击丢弃这份未执行的预览计划（不会改动远端）',
+      pendingDiscarded: '已丢弃未执行的计划',
       statusRepo: '仓库',
       statusBranch: '分支',
       statusDevice: '设备',
@@ -293,6 +295,8 @@ window.__ModuleLoader__.load({
 
       statusTitle: 'Status',
       statusPending: 'A plan is waiting',
+      statusPendingHint: 'Click to discard this unexecuted preview plan (the remote is untouched)',
+      pendingDiscarded: 'Discarded the waiting plan',
       statusRepo: 'Repository',
       statusBranch: 'Branch',
       statusDevice: 'Device',
@@ -2037,6 +2041,13 @@ window.__ModuleLoader__.load({
       const sections = sectionsOverride || (data && data.sections) || normalizeSections(null, null)
       const canSync = !!(data && data.repo && data.hasToken && data.repoValid !== false)
 
+      // 预览计划约 10 分钟过期；等到期后自动刷新一次状态，避免顶部遗留「有未执行的计划」。
+      useEffect(() => {
+        if (!data || !data.pending) return undefined
+        const timer = window.setTimeout(() => { void loadStatus(false) }, 30 * 1000)
+        return () => window.clearTimeout(timer)
+      }, [data && data.pending, loadStatus])
+
       async function refreshAll() {
         setRefreshing(true)
         try {
@@ -2085,8 +2096,26 @@ window.__ModuleLoader__.load({
         }
       }
 
+      async function discardPendingPreview(token) {
+        try {
+          await api('sync/discard', { method: 'POST', body: token ? { token: token } : {} }, tRef.current)
+        } catch (error) {
+          /* 丢弃失败不影响界面；过期的计划会自行消失 */
+        }
+      }
+
+      async function discardWaitingPlan() {
+        await discardPendingPreview('')
+        pushToast('success', t('pendingDiscarded'))
+        await loadStatus(false)
+      }
+
       function closeDialog() {
-        setDialog((current) => (current && current.busy ? current : null))
+        if (dialog && dialog.busy) return
+        const token = dialog && dialog.preview && dialog.preview.token ? dialog.preview.token : ''
+        setDialog(null)
+        if (token) void discardPendingPreview(token)
+        if (token) void loadStatus(false)
       }
 
       function toggleForce(value) {
@@ -2262,7 +2291,13 @@ window.__ModuleLoader__.load({
                   h('h1', { className: 'op-h1' }, t('title')),
                   h('p', { className: 'op-sub' }, t('subtitle')))),
               h('div', { className: 'op-head-actions' },
-                data && data.pending ? h('span', { className: 'op-chip', 'data-tone': 'warn' }, t('statusPending')) : null,
+                data && data.pending ? h('button', {
+                  className: 'op-chip op-warnbtn',
+                  type: 'button',
+                  'data-tone': 'warn',
+                  title: t('statusPendingHint'),
+                  onClick: () => { void discardWaitingPlan() },
+                }, t('statusPending')) : null,
                 bgJob ? h('span', { className: 'op-chip', 'data-tone': 'brand' }, Spinner(), t('bgRunning')) : null,
                 h('button', {
                   className: 'op-btn',
