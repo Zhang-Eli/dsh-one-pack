@@ -94,6 +94,8 @@ test('apply() wires the HTTP API and agent tools', async () => {
     assert.equal(payload.result.hasToken, false)
     assert.equal(payload.result.repoValid, false)
     assert.equal(payload.result.pending.length, 0)
+    assert.equal(payload.result.activeJob, null)
+    assert.ok(payload.result.schedule && typeof payload.result.schedule.enabled === 'boolean')
     assert.ok(payload.result.device.id, 'a stable device id must exist')
 
     // unknown subpath -> 404 JSON

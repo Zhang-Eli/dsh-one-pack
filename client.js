@@ -149,6 +149,8 @@ window.__ModuleLoader__.load({
       scheduleHint: '每天 {time} 自动推送一次（DSH 运行时生效）。',
       scheduleError: '定时设置保存失败',
       bgRunning: '后台同步中…',
+      bgPushing: '推送中…',
+      bgPulling: '拉取中…',
       bgStarted: '已在后台开始{action}，可以继续使用 DSH，完成后会在这里提示。',
       bgFailed: '后台同步失败',
       actionPush: '推送',
@@ -361,6 +363,8 @@ window.__ModuleLoader__.load({
       scheduleHint: 'Pushes once a day at {time} while DSH is running.',
       scheduleError: 'Could not save schedule',
       bgRunning: 'Syncing in background…',
+      bgPushing: 'Pushing…',
+      bgPulling: 'Pulling…',
       bgStarted: 'Started {action} in the background — you can keep using DSH; you will be notified here when it finishes.',
       bgFailed: 'Background sync failed',
       actionPush: 'push',
@@ -1141,6 +1145,7 @@ window.__ModuleLoader__.load({
           : null,
         sectionsRaw: st.sections !== undefined ? st.sections : data.sections,
         schedule: st.schedule || data.schedule || null,
+        activeJob: st.activeJob || data.activeJob || null,
         raw: data,
       }
     }
@@ -1988,6 +1993,19 @@ window.__ModuleLoader__.load({
         for (let i = 0; i < toastTimers.current.length; i += 1) window.clearTimeout(toastTimers.current[i])
       }, [])
 
+      // 切到别的页面再回来时，面板状态会重建；这里根据 status.activeJob 恢复
+      // 「推送中/拉取中」提示并继续轮询，避免用户误以为任务没在跑。
+      const resumedJobRef = useRef('')
+      useEffect(() => {
+        const current = status.data
+        const job = current && current.activeJob
+        if (!job || !job.id) return
+        if (resumedJobRef.current === job.id) return
+        resumedJobRef.current = job.id
+        setBgJob({ id: job.id, direction: job.direction === 'pull' ? 'pull' : 'push' })
+        void pollJob(job.id, job.direction === 'pull' ? 'pull' : 'push')
+      }, [status.data])
+
       const loadStatus = useCallback(async (initial) => {
         const seq = ++statusSeq.current
         if (initial) {
@@ -2298,7 +2316,11 @@ window.__ModuleLoader__.load({
                   title: t('statusPendingHint'),
                   onClick: () => { void discardWaitingPlan() },
                 }, t('statusPending')) : null,
-                bgJob ? h('span', { className: 'op-chip', 'data-tone': 'brand' }, Spinner(), t('bgRunning')) : null,
+                bgJob ? h('span', {
+                  className: 'op-chip',
+                  'data-tone': 'brand',
+                  title: t('bgRunning'),
+                }, Spinner(), t(bgJob.direction === 'pull' ? 'bgPulling' : bgJob.direction === 'push' ? 'bgPushing' : 'bgRunning')) : null,
                 h('button', {
                   className: 'op-btn',
                   type: 'button',
