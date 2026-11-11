@@ -5,7 +5,6 @@
 <div align="center">
 
 [![DSH](https://img.shields.io/badge/DSH-%E2%89%A5%200.2.1--rc.5-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
-[![分区](https://img.shields.io/badge/%E5%88%86%E5%8C%BA-5%20%E4%B8%AA-6D4CC4?style=flat-square)]()
 [![npm](https://img.shields.io/npm/v/dsh-one-pack?style=flat-square)](https://www.npmjs.com/package/dsh-one-pack)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square&logo=opensourceinitiative&logoColor=white)](./LICENSE)
 
