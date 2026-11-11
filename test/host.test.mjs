@@ -9,7 +9,7 @@ import { join } from 'node:path'
 
 import { apply, inject } from '../index.js'
 
-function makeCtx({ home }) {
+function makeCtx({ home, credentials = null }) {
   const routes = []
   const tools = []
   const ctx = {
@@ -29,7 +29,7 @@ function makeCtx({ home }) {
         return () => {}
       },
     },
-    credentials: {
+    credentials: credentials || {
       async resolve() {
         return null
       },
@@ -291,6 +291,50 @@ test('apply() wires the HTTP API and agent tools', async () => {
     const status = await statusTool.execute({})
     assert.match(status.text, /One Pack/)
     assert.equal(typeof statusTool.output.render({}, status)[0].text, 'string')
+  } finally {
+    if (previousHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+test('DELETE /token clears every token alias so the panel disconnects', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'one-pack-host-token-'))
+  const previousHome = process.env.DSH_HOME
+  try {
+    process.env.DSH_HOME = home
+    const values = new Map([
+      ['ONE_PACK_GITHUB_TOKEN', 'new-token'],
+      ['GITHUB_TOKEN', 'stale-token'],
+    ])
+    const credentials = {
+      async resolve(ref) {
+        const value = values.get(ref)
+        return value ? { value } : null
+      },
+      async set(ref, value) {
+        values.set(ref, value)
+      },
+      async unset(ref) {
+        values.delete(ref)
+      },
+    }
+    const { ctx, routes } = makeCtx({ home, credentials })
+    apply(ctx)
+    const handler = routes[0].handler
+
+    const before = fakeResponse()
+    await handler({ method: 'GET', url: '/one-pack/api/status', headers: {} }, before)
+    assert.equal(JSON.parse(before.body).result.hasToken, true)
+
+    const removed = fakeResponse()
+    await handler({ method: 'DELETE', url: '/one-pack/api/token', headers: {} }, removed)
+    assert.equal(removed.status, 200)
+    assert.equal(JSON.parse(removed.body).result.hasToken, false)
+    assert.equal(values.size, 0, 'both ONE_PACK_GITHUB_TOKEN and GITHUB_TOKEN must be cleared')
+
+    const after = fakeResponse()
+    await handler({ method: 'GET', url: '/one-pack/api/status', headers: {} }, after)
+    assert.equal(JSON.parse(after.body).result.hasToken, false)
   } finally {
     if (previousHome === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previousHome

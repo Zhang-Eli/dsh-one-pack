@@ -510,11 +510,7 @@ export function apply(ctx) {
               return;
             }
             if (method === 'DELETE' && sub === 'token') {
-              try {
-                await ctx.credentials.unset(TOKEN_REF);
-              } catch {
-                // 忽略
-              }
+              await engine.clearToken();
               sendJson(res, 200, { ok: true, result: { hasToken: await engine.hasToken() } });
               return;
             }

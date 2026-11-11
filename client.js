@@ -136,6 +136,8 @@ window.__ModuleLoader__.load({
       connHintFirst: '只需填写一次 GitHub Token；保存后会自动创建私有同步仓库。',
       connSave: '保存并创建仓库',
       connConnected: '已连接',
+      connDisconnected: '未连接',
+      connSavedRepo: '已保存的仓库 {repo}，填写 Token 后自动重连。',
       connNoRepo: '尚未创建同步仓库',
       connCreateRepo: '创建私有仓库',
       connCreating: '创建中…',
@@ -350,6 +352,8 @@ window.__ModuleLoader__.load({
       connHintFirst: 'One GitHub token is all you need — the private sync repository is created automatically after saving.',
       connSave: 'Save and create repository',
       connConnected: 'Connected',
+      connDisconnected: 'Not connected',
+      connSavedRepo: 'Saved repository {repo} — save a token to reconnect.',
       connNoRepo: 'No sync repository yet',
       connCreateRepo: 'Create private repository',
       connCreating: 'Creating…',
@@ -702,6 +706,7 @@ window.__ModuleLoader__.load({
 .op-hero-title{margin:0;font-size:11px;font-weight:650;letter-spacing:.7px;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}
 .op-conn{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;padding:2px 0}
 .op-conn-dot{width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-state-success-primary);flex:none}
+.op-conn-dot[data-tone="idle"]{background:var(--dsw-alias-state-idle-primary)}
 .op-conn-text{font-size:13.5px;font-weight:650}
 .op-conn-repo{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:var(--dsw-alias-label-primary);word-break:break-all}
 .op-linkbtn{border:0;background:transparent;color:var(--dsw-alias-brand-primary);font:inherit;font-size:12px;cursor:pointer;padding:2px 0;display:inline-flex;align-items:center;gap:4px;border-radius:4px}
@@ -1420,6 +1425,7 @@ window.__ModuleLoader__.load({
           setTokenEdit(false)
           props.pushToast('success', t('tokenRemoved'))
           props.onChanged()
+          if (props.onTokenRemoved) props.onTokenRemoved()
         } catch (err) {
           setTokenError(errorMessage(t, err, 'tokenSaveFailed'))
         } finally {
@@ -1467,6 +1473,11 @@ window.__ModuleLoader__.load({
 
       const connectParts = []
       if (!hasToken) {
+        const savedRepo = props.data && typeof props.data.repo === 'string' ? props.data.repo : ''
+        connectParts.push(h('div', { className: 'op-conn' },
+          h('span', { className: 'op-conn-dot', 'data-tone': 'idle' }),
+          h('span', { className: 'op-conn-text' }, t('connDisconnected')),
+          savedRepo ? h('span', { className: 'op-muted' }, t('connSavedRepo', { repo: savedRepo })) : null))
         connectParts.push(h('p', { className: 'op-hint', style: { margin: 0 } }, t('connHintFirst')))
         connectParts.push(h('div', { className: 'op-token-row' },
           tokenInput,
@@ -2291,6 +2302,7 @@ window.__ModuleLoader__.load({
             onPreview: (direction) => { void runPreview(direction) },
             pushToast: pushToast,
             onChanged: () => { void loadStatus(false) },
+            onTokenRemoved: () => { setSyncError(null); void loadStatus(false) },
           }),
           h(HistoryCard, {
             t: t,

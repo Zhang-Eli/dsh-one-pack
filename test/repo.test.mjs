@@ -196,3 +196,37 @@ test('autoCreateRepo：GitHub 401/403 映射为类型化错误码', async () => 
     rmSync(home, { recursive: true, force: true })
   }
 })
+test('clearToken：删除 token 时同时清理所有别名，避免回退到旧 GITHUB_TOKEN', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'one-pack-clear-'))
+  const previousHome = process.env.DSH_HOME
+  try {
+    process.env.DSH_HOME = home
+    const store = new StateStore()
+    const values = new Map([
+      ['ONE_PACK_GITHUB_TOKEN', 'new-token'],
+      ['GITHUB_TOKEN', 'stale-token'],
+    ])
+    const unsetCalls = []
+    const credentials = {
+      async resolve(ref) {
+        const value = values.get(ref)
+        return value ? { value } : null
+      },
+      async unset(ref) {
+        unsetCalls.push(ref)
+        values.delete(ref)
+      },
+    }
+    const engine = new SyncEngine({ store, svc: { credentials } })
+    assert.equal(await engine.hasToken(), true)
+    assert.equal(await engine.clearToken(), true)
+    assert.deepEqual(unsetCalls, ['ONE_PACK_GITHUB_TOKEN', 'GITHUB_TOKEN'])
+    assert.equal(values.size, 0)
+    // 旧实现只清 ONE_PACK_GITHUB_TOKEN，会回退到 GITHUB_TOKEN，这里必须为 false。
+    assert.equal(await engine.hasToken(), false)
+  } finally {
+    if (previousHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
