@@ -304,6 +304,48 @@ test('plugins section：export 只带已安装 bundle，planPull 产出差异动
   assert.ok(calls.some((call) => call[0] === 'setPluginEnabled' && call[1] === 'x/plugin' && call[2] === false));
 });
 
+test('plugins section：entryId 变了但 moduleName 一致时按模块匹配，不再误报缺失', async () => {
+  const localPlugins = [
+    { entryId: 'local-hex-1', moduleName: 'dshmarket', enabled: true },
+    { entryId: 'local-hex-2', moduleName: 'dsh-claude-style', enabled: true },
+  ];
+  const calls = [];
+  const pm = {
+    async listBundles() {
+      return [
+        { name: 'dshmarket', version: '1.73.16', installed: true, enabled: true, installTarget: { spec: 'dshmarket@1.73.16', version: '1.73.16' } },
+      ];
+    },
+    async listPlugins() { return localPlugins; },
+    async installBundle() { return { application: 'applied' } },
+    async setBundleEnabled() { return { application: 'applied' } },
+    async setPluginEnabled(id, enabled) { calls.push([id, enabled]); return { application: 'applied' } },
+  };
+  const ctx = { state: { device }, svc: { pluginManager: pm }, warn() {} };
+  const remote = makeRemote({
+    json: {
+      'plugins/bundles.json': {
+        // 远端升级了 dshmarket；entryId 在本机重装后会变，但 moduleName 不变
+        bundles: [
+          { name: 'dshmarket', version: '1.73.17', spec: 'dshmarket@1.73.17', enabled: true, saveExact: true },
+        ],
+        plugins: [
+          { id: 'remote-hex-a', name: 'dshmarket', enabled: false },
+          { id: 'remote-hex-b', name: 'dsh-claude-style', enabled: true },
+        ],
+      },
+    },
+  });
+
+  const plan = await pluginsSection.planPull(ctx, remote);
+  assert.ok(!plan.warnings.some((w) => /找不到|没有插件/.test(w)), `不应误报缺失：${plan.warnings.join(' / ')}`);
+  assert.deepEqual(plan.actions.map((action) => `${action.kind}:${action.title}`).sort(), ['disable:dshmarket', 'update:dshmarket']);
+
+  const applied = await pluginsSection.applyPull(ctx, remote, plan);
+  assert.equal(applied.restartRequired, false);
+  assert.deepEqual(calls, [['local-hex-1', false]]);
+});
+
 test('plugins section：服务缺失时 export 降级、planPull 抛出结构化错误', async () => {
   const ctx = { state: { device }, svc: {}, warn() {} };
   const exported = await pluginsSection.export(ctx);
