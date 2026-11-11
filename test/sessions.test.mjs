@@ -642,3 +642,53 @@ test('applyPull：内容相同的会话（skip）也会补挂到工作区', asyn
     assert.ok(readFileSync(join(dsh, 'sessions', project, 'sess-same', SESSION_FILE)).equals(localBuf), 'skip 不应改写本地文件');
   });
 });
+
+test('已归档会话不参与同步：export 跳过、planPull 跳过', async () => {
+  await withDshHome(async (dsh) => {
+    const cwd = join(dsh, 'ws-archived');
+    mkdirSync(cwd, { recursive: true });
+    const project = projectKey(cwd);
+    const keep = makeSession({ id: 'sess-keep', cwd, frames: [line('user/message', { text: 'keep' })] });
+    const gone = makeSession({ id: 'sess-archived', cwd, frames: [line('user/message', { text: 'archived' })] });
+    writeLocalSession(dsh, cwd, 'sess-keep', keep);
+    writeLocalSession(dsh, cwd, 'sess-archived', gone);
+
+    // workspace.json 记录归档会话
+    const wsj = join(dsh, 'storages', 'workspace.json');
+    mkdirSync(dirname(wsj), { recursive: true });
+    writeFileSync(wsj, JSON.stringify({
+      unit: { name: 'workspace', version: 2 },
+      global: { archivedSessionIds: ['sess-archived'], pinnedSessionIds: [], workspaceIds: [], initialized: true },
+      tables: { workspaces: {} },
+    }));
+
+    const registry = makeRegistry([{ path: cwd, title: 'Archived' }]);
+    const ctx = makeCtx(registry);
+    const exported = await exportSessions(ctx);
+    const index = JSON.parse(exported.files[0].content);
+    assert.deepEqual(Object.keys(index.sessions), ['sess-keep']);
+    assert.ok(!exported.files.some((f) => f.path.includes('sess-archived')), '归档会话不应导出文件');
+    assert.ok(exported.warnings.some((w) => w.includes('已归档')));
+
+    // pull：远端即使含有本地已归档的会话，也应跳过
+    const remoteBuf = makeSession({ id: 'sess-remote-archived', cwd: 'D:/remote/x', frames: [line('user/message', { text: 'r' })] });
+    const remote = mockRemote([
+      { path: INDEX_PATH, content: JSON.stringify({
+        schema: 1,
+        device: { id: 'dev-remote', name: 'r', platform: 'darwin' },
+        projects: { [project]: { originalCwd: cwd, title: 'Archived' } },
+        sessions: { 'sess-remote-archived': { project, title: 'Remote archived', bodySha: sha256(sessionBody(remoteBuf)), bytes: remoteBuf.length, updatedAt: '2026-01-04T00:00:00.000Z' } },
+        attachments: {},
+      }) },
+      { path: `sessions/${project}/sess-remote-archived.jsonl.zstd`, content: remoteBuf },
+    ]);
+    const wsj2 = JSON.parse(readFileSync(wsj, 'utf8'));
+    wsj2.global.archivedSessionIds = ['sess-remote-archived'];
+    writeFileSync(wsj, JSON.stringify(wsj2));
+
+    const plan = await planPull(makeCtx(registry), remote);
+    assert.equal(plan.summary.archived, 1);
+    assert.equal(plan.summary.write, 0);
+    assert.deepEqual(plan.actions, []);
+  });
+});

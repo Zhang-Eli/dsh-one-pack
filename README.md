@@ -15,7 +15,7 @@
 | 已装插件 `plugins` | 开 | 已安装 bundle 的安装规格、版本、启停状态；已挂载条目的启停 | `pluginManager.installBundle()` / `setBundleEnabled()` / `setPluginEnabled()` |
 | 设置 `settings` | 开 | `configEditor` 里每个条目的**显式用户覆盖**（DSH 设置 + 插件设置都在这里），敏感字段自动脱敏 | 按条目 id `configEditor.edit()` |
 | 技能 `skills` | 关 | `$DSH_HOME/skills/**` | 备份后覆盖写，不删除本地多余技能 |
-| 会话 `sessions` | 关 | `session.v4.jsonl.zstd` + 被引用附件 + 工作区注册信息 | 改 header.cwd → 落盘 → **自动挂载到工作区**（已存在但未挂载的会话也会补挂）；body 前缀比较、分叉另存 |
+| 会话 `sessions` | 关 | `session.v4.jsonl.zstd` + 被引用附件 + 工作区注册信息（**跳过已归档会话**） | 改 header.cwd → 落盘 → **自动挂载到工作区**（已存在但未挂载的会话也会补挂）；body 前缀比较、分叉另存 |
 | 工作区文件 `files` | 关 | 你显式登记的目录 | 还原到原 cwd，冲突另存 `.remote-<时间戳><扩展名>` |
 
 所有分区都能单独开关，也可以在一次同步里只选部分分区（工具参数 `sections`）。
