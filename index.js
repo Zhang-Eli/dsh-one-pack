@@ -348,11 +348,11 @@ function makeTools(engine, store, ctx) {
         properties: {
           repo: { type: 'string', description: 'owner/repo 或 GitHub 仓库 URL；空字符串表示清除' },
           branch: { type: 'string', description: '分支名，默认 main' },
-          token: { type: 'string', description: 'GitHub fine-grained/classic token（只写不读）' },
+          token: { type: 'string', description: 'GitHub classic token（勾选 repo，只写不读）' },
           createRepo: {
             type: 'boolean',
             description:
-              '保存 token 后自动创建（或复用）私有同步仓库并写入 repo；需要 token 具备 repo（classic）或 Administration: write（fine-grained）权限',
+              '保存 token 后自动创建（或复用）私有同步仓库并写入 repo；需要 token 具备 repo 权限（GitHub 生成页勾选 repo）',
           },
           sections: {
             type: 'object',

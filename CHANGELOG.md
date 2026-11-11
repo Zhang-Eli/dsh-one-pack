@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.7
+
+- 默认统一使用 classic token：Token 区说明精简为一行「需要仓库读写权限；仅在访问私有仓库时需要」，不再介绍 fine-grained token 的勾选方式
+- README 的生成步骤改为 classic token（生成页已预填 `repo`）一步到位
+- `one_pack_setup` 工具说明同步改为 classic token / `repo` 权限
+
 ## 0.4.6
 
 - 移除 Token 时同时清理所有 token 别名（`ONE_PACK_GITHUB_TOKEN` 与旧的 `GITHUB_TOKEN`），避免回退到权限不足的旧 token 导致「已连接」却推送 404

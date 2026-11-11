@@ -46,7 +46,7 @@ dsh plugin --profile desktop add dsh-one-pack
 ## 使用
 
 1. 侧栏打开 **One Pack**。
-2. 点 GitHub Token 旁的 **生成 Token ↗** 直达 GitHub 生成页：classic token 勾选 `repo`；fine-grained token 至少给目标仓库 `Contents: Read and write`，要自动建仓再加 `Administration: Read and write`。保存 token。
+2. 点 GitHub Token 旁的 **生成 Token ↗** 直达 GitHub 的 classic token 生成页（已预填 `repo` 权限），直接点底部 **Generate token** 后把 token 粘回面板保存即可。
 3. 保存 token 后如果还没配置仓库，面板会**自动**在该账号下创建私有同步仓库 `dsh-one-pack-sync` 并填好仓库地址；已有同名仓库则直接复用。也可以点「自动创建私有仓库」手动触发，或改成自己的 `owner/repo`。
 4. 打开要同步的分区（默认是插件 + 设置）。
 5. 点 **Push** → 看预览摘要 → 确认执行（随后在后台运行，界面不阻塞）。

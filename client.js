@@ -122,8 +122,6 @@ window.__ModuleLoader__.load({
       tokenHint: '需要仓库读写权限；仅在访问私有仓库时需要。',
       tokenGenerate: '生成 Token ↗',
       tokenGenerateNew: '生成新 Token ↗',
-      tokenGenerateHint:
-        '打开 GitHub 生成页：classic token 勾选 repo；fine-grained token 需要 Contents 读写 + Administration 读写（自动创建私有仓库用）。',
       tokenInvalid: 'Token 无效或已过期，请重新生成后保存。',
       repoAutoCreate: '自动创建私有仓库',
       repoAutoCreating: '创建中…',
@@ -338,8 +336,6 @@ window.__ModuleLoader__.load({
       tokenHint: 'Needs repository read/write access; only private repositories require it.',
       tokenGenerate: 'Generate token ↗',
       tokenGenerateNew: 'Generate new token ↗',
-      tokenGenerateHint:
-        'Opens the GitHub token page: tick repo for classic tokens; fine-grained tokens need Contents read/write plus Administration read/write (for auto-creating the private repository).',
       tokenInvalid: 'The token is invalid or expired. Please generate a new one.',
       repoAutoCreate: 'Create private repo',
       repoAutoCreating: 'Creating…',
@@ -1490,7 +1486,7 @@ window.__ModuleLoader__.load({
           }, tokenBusy ? Spinner() : null, tokenBusy ? t('saving') : t('connSave'))))
         connectParts.push(h('div', { className: 'op-inline' },
           h('button', { className: 'op-linkbtn', type: 'button', onClick: openTokenPage }, t('tokenGenerate')),
-          h('span', { className: 'op-hint' }, t('tokenGenerateHint'))))
+          h('span', { className: 'op-hint' }, t('tokenHint'))))
         if (tokenError) connectParts.push(h('div', { className: 'op-hint', 'data-tone': 'error' }, tokenError))
       } else if (tokenEdit) {
         connectParts.push(h('div', { className: 'op-token-row' },
