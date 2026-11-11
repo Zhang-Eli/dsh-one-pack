@@ -113,9 +113,11 @@ function mockRemote(fileList) {
   for (const f of fileList) {
     map.set(f.path, Buffer.isBuffer(f.content) ? f.content : Buffer.from(f.content, 'utf8'));
   }
+  const calls = { readFile: [] };
   return {
     snapshot: null,
     map,
+    calls,
     async readJson(path) {
       const buf = map.get(path);
       return buf ? JSON.parse(buf.toString('utf8')) : null;
@@ -125,6 +127,7 @@ function mockRemote(fileList) {
       return buf ? buf.toString('utf8') : null;
     },
     async readFile(path) {
+      calls.readFile.push(path);
       return map.get(path) ?? null;
     },
   };
@@ -640,6 +643,40 @@ test('applyPull：内容相同的会话（skip）也会补挂到工作区', asyn
     assert.equal(result.applied.imported, 1);
     assert.deepEqual(registry.calls.attach, ['sess-same']);
     assert.ok(readFileSync(join(dsh, 'sessions', project, 'sess-same', SESSION_FILE)).equals(localBuf), 'skip 不应改写本地文件');
+  });
+});
+
+test('planPull：本地 body 与远端索引一致时不下载远端会话（快速路径）', async () => {
+  await withDshHome(async (dsh) => {
+    const cwd = join(dsh, 'ws-fast');
+    mkdirSync(cwd, { recursive: true });
+    const project = projectKey(cwd);
+    const e1 = line('user/message', { text: 'unchanged-body' });
+
+    // 本地与远端只有头帧 cwd 不同，body 完全一致
+    const localBuf = makeSession({ id: 'sess-fast', cwd, frames: [e1] });
+    writeLocalSession(dsh, cwd, 'sess-fast', localBuf);
+    const remoteBuf = makeSession({ id: 'sess-fast', cwd: 'D:/remote/elsewhere', frames: [e1] });
+    const index = {
+      schema: 1,
+      updatedAt: '2026-01-05T00:00:00.000Z',
+      device: { id: 'dev-remote', name: 'remote-host', platform: 'darwin' },
+      projects: { [project]: { originalCwd: cwd, title: 'Fast' } },
+      sessions: {
+        'sess-fast': { project, title: 'Fast', bodySha: sha256(sessionBody(remoteBuf)), bytes: remoteBuf.length, updatedAt: '2026-01-05T00:00:00.000Z' },
+      },
+      attachments: {},
+    };
+    const remote = mockRemote([
+      { path: INDEX_PATH, content: JSON.stringify(index) },
+      { path: `sessions/${project}/sess-fast.jsonl.zstd`, content: remoteBuf },
+    ]);
+
+    const plan = await planPull(makeCtx(makeRegistry([{ path: cwd, title: 'Fast' }])), remote);
+    assert.equal(plan.summary.skip, 1);
+    assert.equal(plan.summary.import, 1);
+    assert.equal(plan.summary.write, 0);
+    assert.deepEqual(remote.calls.readFile, [], 'body 一致时不应读取远端会话 blob');
   });
 });
 
