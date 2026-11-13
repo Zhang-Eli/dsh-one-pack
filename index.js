@@ -127,14 +127,23 @@ function warningsText(warnings) {
   return `\n警告：\n${warnings.map((item) => `- [${item.code}] ${item.message}`).join('\n')}`;
 }
 
+function deviceLabel(device) {
+  if (!device || typeof device !== 'object') return '';
+  const id = typeof device.id === 'string' ? device.id.slice(0, 8) : '';
+  return `${device.name || '设备'}${id ? `#${id}` : ''}`;
+}
+
 function previewText(preview) {
   const totals = preview.summary?.totals ?? {};
   const lines = [
     `One Pack 预览（${preview.direction}）`,
     `分区：${preview.sections.join(', ')}`,
-    '',
-    '分区摘要：',
   ];
+  if (preview.direction === 'pull' && Array.isArray(preview.summary?.devices) && preview.summary.devices.length) {
+    lines.push(`来源设备：${deviceLabel(preview.summary.source) || '（该来源暂无备份）'}`);
+    lines.push(`远端备份设备：${preview.summary.devices.map(deviceLabel).join('、')}`);
+  }
+  lines.push('', '分区摘要：');
   for (const name of preview.sections) {
     lines.push(`- ${name}：${summaryLine(preview.summary?.sections?.[name])}`);
   }
@@ -168,10 +177,14 @@ function executeText(result) {
     '',
     '结果：',
   ];
+  if (result.direction === 'pull' && result.source) {
+    lines.splice(3, 0, `来源设备：${deviceLabel(result.source)}`);
+  }
   for (const name of result.sections) {
     lines.push(`- ${name}：${summaryLine(result.summary?.sections?.[name])}`);
   }
   if (result.summary?.failed?.length) lines.push(`失败分区：${result.summary.failed.join(', ')}`);
+  if (result.summary?.migrated) lines.push(`旧布局迁移：${result.summary.migrated} 的历史备份已收进 devices/ 命名空间`);
   if (result.direction === 'push' && typeof result.summary?.files === 'number') {
     lines.push(`文件：${result.summary.files} 个，删除 ${result.summary.deletes ?? 0} 个`);
   }
@@ -202,7 +215,8 @@ function statusText(report) {
   }
   if (report.lastSync) {
     lines.push(
-      `最近同步：${report.lastSync.at} · ${report.lastSync.direction} · ${report.lastSync.commitSha || '—'}`,
+      `最近同步：${report.lastSync.at} · ${report.lastSync.direction} · ${report.lastSync.commitSha || '—'}` +
+        (report.lastSync.source?.name ? ` · 来源 ${deviceLabel(report.lastSync.source)}` : ''),
     );
   } else {
     lines.push('最近同步：从未同步');
@@ -302,7 +316,7 @@ function makeTools(engine, store, ctx) {
     {
       name: 'one_pack_sync',
       description:
-        '把 DSH 环境（已装插件、设置、技能、会话、工作区文件）推送/拉取到 GitHub。两段式：先 phase=preview 拿摘要与 previewToken，再 phase=execute 带同一个 token 真正执行；执行前会自动备份。',
+        '把 DSH 环境（已装插件、设置、技能、会话、工作区文件）推送/拉取到 GitHub。支持多设备共用一个仓库：远端按 devices/<设备id>/ 命名空间互不覆盖，拉取可用 sourceDevice 选来源。两段式：先 phase=preview 拿摘要与 previewToken，再 phase=execute 带同一个 token 真正执行；执行前会自动备份。',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -316,6 +330,11 @@ function makeTools(engine, store, ctx) {
             description: '只处理这些分区；默认使用已启用的分区',
           },
           force: { type: 'boolean', description: '覆盖远端已被其他设备更新/会话分叉时的保护，默认 false' },
+          sourceDevice: {
+            type: 'string',
+            description:
+              "拉取预览时选择来源设备：'self'（默认，本设备 id 的备份）、'latest'（所有设备中最近更新）、或具体设备 id；execute 阶段自动沿用预览的选择",
+          },
           previewToken: { type: 'string', description: 'execute 阶段必须带上 preview 返回的 token' },
         },
       },
@@ -325,7 +344,11 @@ function makeTools(engine, store, ctx) {
       async execute(args) {
         const direction = args.direction;
         if (args.phase === 'preview') {
-          const preview = await engine.preview(direction, { sections: args.sections, force: Boolean(args.force) });
+          const preview = await engine.preview(direction, {
+            sections: args.sections,
+            force: Boolean(args.force),
+            sourceDevice: args.sourceDevice,
+          });
           return { text: `${previewText(preview)}\n\nTOKEN=${preview.token}`, token: preview.token };
         }
         if (args.phase !== 'execute') {
@@ -549,6 +572,7 @@ export function apply(ctx) {
                 const preview = await engine.preview(body.direction, {
                   sections: body.sections,
                   force: Boolean(body.force),
+                  sourceDevice: body.sourceDevice,
                 });
                 sendJson(res, 200, { ok: true, result: preview });
                 return;

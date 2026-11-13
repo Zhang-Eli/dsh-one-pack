@@ -154,6 +154,8 @@ test('push from home A, pull into home B, every partition round-trips', async ()
       files: { paths: [wsA], patterns: [] },
     }))
 
+    const devA = storeA.read().device.id
+    const dirA = `devices/${devA}/`
     const settingsEntry = { id: 'ui-settings', name: 'ui-settings' }
     const configA = makeConfigEditor({
       rows: [{ entry: settingsEntry, inherited: { theme: 'light' }, override: { theme: 'dark', apiKey: 'plain-secret' } }],
@@ -174,25 +176,28 @@ test('push from home A, pull into home B, every partition round-trips', async ()
     const previewPush = await engineA.preview('push')
     assert.ok(previewPush.token, 'preview must return a token')
     const pushPaths = previewPush.items.map((item) => item.path)
-    assert.ok(pushPaths.includes('skills/demo/SKILL.md'))
-    assert.ok(pushPaths.includes('settings/config.json'))
-    assert.ok(pushPaths.some((path) => path.startsWith('files/') && path.endsWith('/notes/readme.md')))
+    assert.ok(pushPaths.includes(dirA + 'skills/demo/SKILL.md'), 'push items must be namespaced under devices/<id>/')
+    assert.ok(pushPaths.includes(dirA + 'settings/config.json'))
+    assert.ok(pushPaths.some((path) => path.startsWith(dirA + 'files/') && path.endsWith('/notes/readme.md')))
     assert.ok(!pushPaths.some((path) => path.includes('.env')), '.env must be blocked')
 
     const pushed = await engineA.execute('push', { token: previewPush.token })
     assert.equal(pushed.direction, 'push')
     assert.ok(pushed.commitSha)
 
-    // remote layout
-    for (const expected of ['one-pack.json', 'README.md', 'plugins/bundles.json', 'settings/config.json', 'skills/_index.json', 'files/_index.json']) {
+    // remote layout: section data lives in devices/<id>/ namespaces; index + README stay at root
+    for (const expected of ['one-pack.json', 'README.md']) {
       assert.ok(cloud.files.has(expected), `remote must contain ${expected}`)
     }
-    assert.ok(cloud.files.has(`files/${keyA}/notes/readme.md`))
+    for (const expected of ['plugins/bundles.json', 'settings/config.json', 'skills/_index.json', 'files/_index.json']) {
+      assert.ok(cloud.files.has(dirA + expected), `remote must contain ${dirA}${expected}`)
+    }
+    assert.ok(cloud.files.has(dirA + `files/${keyA}/notes/readme.md`))
     assert.ok(![...cloud.files.keys()].some((path) => path.includes('.env')), '.env must not be uploaded')
 
     // Unreproducible bundles (link installs, One Pack itself) must not be asked
     // for on another machine; they are reported as a warning instead.
-    const remoteBundles = await cloud.readJson('plugins/bundles.json')
+    const remoteBundles = await cloud.readJson(dirA + 'plugins/bundles.json')
     assert.deepEqual(remoteBundles.bundles.map((bundle) => bundle.name), ['dsh-ops'])
 
     // A second push with no local change is a no-op: section payloads carry no
@@ -208,13 +213,16 @@ test('push from home A, pull into home B, every partition round-trips', async ()
       'a no-op push must not create a commit',
     )
 
-    const manifest = await cloud.readJson('one-pack.json')
-    assert.equal(manifest.schema, 1)
-    assert.equal(manifest.device.id, storeA.read().device.id)
-    assert.ok(Object.keys(manifest.files).includes('skills/demo/SKILL.md'))
-    assert.equal(manifest.files['skills/demo/SKILL.md'], sha256(Buffer.from('# demo skill\n')))
+    const index = await cloud.readJson('one-pack.json')
+    assert.equal(index.schema, 2)
+    assert.equal(index.devices[devA].manifest, dirA + 'one-pack.json')
+    const manifest = await cloud.readJson(dirA + 'one-pack.json')
+    assert.equal(manifest.schema, 2)
+    assert.equal(manifest.device.id, devA)
+    assert.ok(Object.keys(manifest.files).includes(dirA + 'skills/demo/SKILL.md'))
+    assert.equal(manifest.files[dirA + 'skills/demo/SKILL.md'], sha256(Buffer.from('# demo skill\n')))
 
-    const remoteSettings = await cloud.readJson('settings/config.json')
+    const remoteSettings = await cloud.readJson(dirA + 'settings/config.json')
     assert.equal(remoteSettings.entries['ui-settings'].override.theme, 'dark')
     assert.equal(remoteSettings.entries['ui-settings'].override.apiKey, '***', 'apiKey must be masked on the remote')
     assert.deepEqual(remoteSettings.redacted, [['apiKey']])
@@ -242,7 +250,13 @@ test('push from home A, pull into home B, every partition round-trips', async ()
     })
     const engineB = new SyncEngine({ store: storeB, svc: makeSvc({ pluginManager: pluginsB, configEditor: configB }), cloudFactory: () => cloud })
 
-    const previewPull = await engineB.preview('pull')
+    const devB = storeB.read().device.id
+    assert.notEqual(devB, devA, 'each DSH_HOME must get its own device id')
+    // default 'self' must not silently pull another device's backup
+    const previewSelf = await engineB.preview('pull')
+    assert.equal(previewSelf.summary.noData, true, 'pull with no own backup must preview as no-data')
+    const previewPull = await engineB.preview('pull', { sourceDevice: 'latest' })
+    assert.equal(previewPull.sourceDeviceId, devA)
     const kinds = previewPull.items.map((item) => item.kind)
     assert.ok(kinds.includes('install'), 'pull must plan bundle installs')
     assert.ok(kinds.includes('update'), 'pull must plan settings updates')
@@ -265,6 +279,17 @@ test('push from home A, pull into home B, every partition round-trips', async ()
     assert.equal(install.options.saveExact, true)
     assert.ok(pluginCalls.some((call) => call.method === 'setPluginEnabled' && call.id === 'include:settings' && call.enabled === true))
 
+    // Device B pushes its own backup: A's namespace must survive untouched.
+    const dirB = `devices/${devB}/`
+    const skillAContent = cloud.files.get(dirA + 'skills/demo/SKILL.md').toString('utf8')
+    const previewPushB = await engineB.preview('push')
+    const pushedB = await engineB.execute('push', { token: previewPushB.token })
+    assert.equal(pushedB.device.id, devB)
+    assert.ok(cloud.files.has(dirB + 'settings/config.json'), 'B namespace must exist')
+    assert.equal(cloud.files.get(dirA + 'skills/demo/SKILL.md').toString('utf8'), skillAContent, "A's files must not be overwritten by B's push")
+    const indexAfterB = await cloud.readJson('one-pack.json')
+    assert.ok(indexAfterB.devices[devA] && indexAfterB.devices[devB], 'root index must list both devices')
+
     // settings applied exactly once, masked secret kept local
     assert.equal(configCalls.length, 1)
     assert.equal(configCalls[0].entryId, 'ui-settings')
@@ -277,11 +302,150 @@ test('push from home A, pull into home B, every partition round-trips', async ()
 
     // pull recorded in history + state
     const stateAfter = storeB.read()
-    assert.equal(stateAfter.lastSync.direction, 'pull')
-    assert.equal(stateAfter.lastSync.commitSha, pushed.commitSha)
+    assert.equal(stateAfter.lastSync.direction, 'push')
+    assert.equal(stateAfter.lastSync.device.id, devB)
     const history = storeB.history(5)
-    assert.equal(history[0].direction, 'pull')
-    assert.equal(history[0].ok, true)
+    assert.equal(history[0].direction, 'push')
+    assert.equal(history[0].device.id, devB)
+    assert.equal(history[1].direction, 'pull')
+    assert.equal(history[1].ok, true)
+    assert.equal(history[1].sourceDevice.id, devA, 'pull history row must record the source device')
+  } finally {
+    if (previousHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousHome
+    if (previousProfile === undefined) delete process.env.DSH_PROFILE
+    else process.env.DSH_PROFILE = previousProfile
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('legacy single-device remote is migrated into devices/ namespaces on first multi-device push', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'one-pack-legacy-'))
+  const homeA = join(root, 'homeA')
+  const previousHome = process.env.DSH_HOME
+  const previousProfile = process.env.DSH_PROFILE
+  try {
+    process.env.DSH_HOME = homeA
+    process.env.DSH_PROFILE = 'it'
+    mkdirSync(join(homeA, 'one-pack'), { recursive: true })
+    put(join(homeA, 'skills', 'demo', 'SKILL.md'), '# new machine skill\n')
+
+    const legacyId = 'aaaaaaaa-1111-2222-3333-444444444444'
+    const legacySkill = '# old machine skill\n'
+    const legacyIndexFile = JSON.stringify({
+      schema: 1,
+      device: null,
+      files: { 'demo/SKILL.md': { sha256: sha256(Buffer.from(legacySkill)), size: Buffer.byteLength(legacySkill) } },
+    })
+    const cloud = makeFakeCloud()
+    const legacyManifest = {
+      schema: 1,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      device: { id: legacyId, name: 'OldBox', platform: 'win32' },
+      sections: { skills: {} },
+      files: {
+        'one-pack.json': 'x',
+        'README.md': 'x',
+        'skills/_index.json': sha256(Buffer.from(legacyIndexFile)),
+        'skills/demo/SKILL.md': sha256(Buffer.from(legacySkill)),
+      },
+    }
+    cloud.files.set('one-pack.json', Buffer.from(JSON.stringify(legacyManifest), 'utf8'))
+    cloud.files.set('README.md', Buffer.from('# old readme\n', 'utf8'))
+    cloud.files.set('skills/_index.json', Buffer.from(legacyIndexFile, 'utf8'))
+    cloud.files.set('skills/demo/SKILL.md', Buffer.from(legacySkill, 'utf8'))
+
+    const storeA = new StateStore()
+    storeA.update((current) => ({
+      ...current,
+      repo: 'octo/one-pack-test',
+      branch: 'main',
+      sections: { plugins: false, settings: false, skills: true, sessions: false, files: false },
+    }))
+    const engineA = new SyncEngine({ store: storeA, svc: makeSvc({}), cloudFactory: () => cloud })
+    const devA = storeA.read().device.id
+
+    const preview = await engineA.preview('push')
+    assert.ok(preview.warnings.some((item) => item.code === 'LEGACY_LAYOUT'), 'legacy layout must be warned')
+
+    const pushed = await engineA.execute('push', { token: preview.token })
+    assert.equal(pushed.summary.migrated, 'OldBox')
+    assert.ok(cloud.files.has(`devices/${legacyId}/skills/demo/SKILL.md`), 'old device data must be copied into its own namespace')
+    assert.ok(cloud.files.has(`devices/${legacyId}/one-pack.json`))
+    assert.ok(!cloud.files.has('skills/demo/SKILL.md'), 'root-level legacy section files must be deleted')
+    const index = await cloud.readJson('one-pack.json')
+    assert.equal(index.schema, 2)
+    assert.equal(index.devices[legacyId].name, 'OldBox')
+    assert.ok(index.devices[devA], 'own namespace entry must exist')
+
+    // pull from the migrated legacy device
+    const previewPull = await engineA.preview('pull', { sourceDevice: legacyId })
+    assert.equal(previewPull.sourceDeviceId, legacyId)
+    const pulled = await engineA.execute('pull', { token: previewPull.token })
+    assert.equal(pulled.source.id, legacyId)
+    assert.equal(readFileSync(join(homeA, 'skills', 'demo', 'SKILL.md'), 'utf8'), legacySkill, 'pull from the legacy device restores its content')
+  } finally {
+    if (previousHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousHome
+    if (previousProfile === undefined) delete process.env.DSH_PROFILE
+    else process.env.DSH_PROFILE = previousProfile
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('pull from an empty or unmatched remote previews no-data instead of crashing', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'one-pack-empty-'))
+  const homeC = join(root, 'homeC')
+  const previousHome = process.env.DSH_HOME
+  const previousProfile = process.env.DSH_PROFILE
+  try {
+    process.env.DSH_HOME = homeC
+    process.env.DSH_PROFILE = 'it'
+    mkdirSync(join(homeC, 'one-pack'), { recursive: true })
+    const storeC = new StateStore()
+    storeC.update((current) => ({
+      ...current,
+      repo: 'octo/one-pack-test',
+      branch: 'main',
+      sections: { plugins: false, settings: true, skills: false, sessions: false, files: false },
+    }))
+    const cloud = makeFakeCloud()
+    const engineC = new SyncEngine({
+      store: storeC,
+      svc: makeSvc({ pluginManager: makePluginManager(), configEditor: makeConfigEditor({ rows: [] }) }),
+      cloudFactory: () => cloud,
+    })
+    const devC = storeC.read().device.id
+
+    const previewEmpty = await engineC.preview('pull')
+    assert.equal(previewEmpty.summary.noData, true)
+    assert.deepEqual(previewEmpty.summary.devices, [])
+    assert.ok(previewEmpty.warnings.some((item) => item.code === 'EMPTY_REMOTE'))
+    await assert.rejects(
+      () => engineC.execute('pull', { token: previewEmpty.token }),
+      (err) => err && err.code === 'EMPTY_REMOTE',
+      'executing an empty pull must fail loudly',
+    )
+
+    // remote has another device's data only: 'self' stays no-data, 'latest' resolves
+    const otherId = 'ffffffff-0000-0000-0000-000000000000'
+    cloud.files.set(
+      'one-pack.json',
+      Buffer.from(
+        JSON.stringify({
+          schema: 2,
+          updatedAt: '2026-01-02T00:00:00.000Z',
+          devices: { [otherId]: { name: 'Other', platform: 'linux', updatedAt: '2026-01-02T00:00:00.000Z', manifest: `devices/${otherId}/one-pack.json` } },
+        }),
+        'utf8',
+      ),
+    )
+    const previewNoMine = await engineC.preview('pull')
+    assert.equal(previewNoMine.summary.noData, true)
+    assert.equal(previewNoMine.summary.devices.length, 1)
+    const previewLatest = await engineC.preview('pull', { sourceDevice: 'latest' })
+    assert.equal(previewLatest.sourceDeviceId, otherId)
+    assert.notEqual(devC, otherId)
   } finally {
     if (previousHome === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previousHome

@@ -231,6 +231,11 @@ window.__ModuleLoader__.load({
       historyDirectionPush: '推送',
       historyDirectionPull: '拉取',
       historyError: '错误',
+      pullSourceLabel: '拉取来源',
+      pullSourceSelf: '本设备',
+      pullSourceLatest: '最新备份（所有设备）',
+      historyDeviceName: '设备 {name}',
+      historySourceName: '来源 {name}',
 
       kindAdd: '新增',
       kindUpdate: '更新',
@@ -445,6 +450,11 @@ window.__ModuleLoader__.load({
       historyDirectionPush: 'Push',
       historyDirectionPull: 'Pull',
       historyError: 'Error',
+      pullSourceLabel: 'Pull source',
+      pullSourceSelf: 'This device',
+      pullSourceLatest: 'Latest backup (any device)',
+      historyDeviceName: 'device {name}',
+      historySourceName: 'from {name}',
 
       kindAdd: 'Added',
       kindUpdate: 'Updated',
@@ -619,6 +629,7 @@ window.__ModuleLoader__.load({
 .op-field{display:flex;flex-direction:column;gap:5px;min-width:0}
 .op-label{font-size:12px;color:var(--dsw-alias-label-secondary)}
 .op-input{width:100%;height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;outline:none;transition:border-color .12s ease}
+      .op-select{width:100%;height:32px;padding:0 8px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;outline:none;cursor:pointer;}
 .op-input::placeholder{color:var(--dsw-alias-label-secondary)}
 .op-input:focus{border-color:var(--dsw-alias-brand-primary)}
 .op-input:disabled{opacity:.6}
@@ -1182,6 +1193,7 @@ window.__ModuleLoader__.load({
         summary: src.summary && typeof src.summary === 'object' ? src.summary : null,
         warnings: normalizeWarnings(src.warnings || data.warnings),
         items: normalizeItems(src.items || data.items),
+        sourceDeviceId: asText(src.sourceDeviceId),
       }
     }
 
@@ -1209,6 +1221,8 @@ window.__ModuleLoader__.load({
         sections: normalizeSectionNames(entry.sections),
         warnings: normalizeWarnings(entry.warnings),
         error: asText(entry.error && typeof entry.error === 'object' ? entry.error.message : entry.error),
+        device: entry.device && typeof entry.device === 'object' ? { id: asText(entry.device.id), name: asText(entry.device.name) } : null,
+        sourceDevice: entry.sourceDevice && typeof entry.sourceDevice === 'object' ? { id: asText(entry.sourceDevice.id), name: asText(entry.sourceDevice.name) } : null,
       }
     }
 
@@ -1271,6 +1285,7 @@ window.__ModuleLoader__.load({
     function buildSuccessText(t, outcome) {
       let text = t('previewOk')
       if (outcome.commitSha) text += ' · ' + t('previewCommit', { sha: shortSha(outcome.commitSha) })
+      if (outcome.summary && outcome.summary.source && outcome.summary.source.name) text += ' · ' + t('historySourceName', { name: outcome.summary.source.name })
       if (outcome.warnings.length > 0) text += ' · ' + t('historyWarnings', { n: outcome.warnings.length })
       const applied = outcome.applied
       if (applied && (applied.restartRequired === true || applied.restart === true)) {
@@ -1715,6 +1730,12 @@ window.__ModuleLoader__.load({
                   isPush ? t('syncPush') : t('syncPull')),
                 h('span', { className: 'op-chip', 'data-tone': entry.ok ? 'success' : 'error' },
                   entry.ok ? t('ok') : t('failed')),
+                entry.device && entry.device.name
+                  ? h('span', { className: 'op-chip' }, t('historyDeviceName', { name: entry.device.name }))
+                  : null,
+                entry.sourceDevice && entry.sourceDevice.name
+                  ? h('span', { className: 'op-chip', 'data-tone': 'brand' }, t('historySourceName', { name: entry.sourceDevice.name }))
+                  : null,
                 h('span', { className: 'op-muted' }, relativeTime(t, entry.at)),
                 entry.commitSha ? h('span', { className: 'op-chip op-mono' }, t('historyCommit', { sha: shortSha(entry.commitSha) })) : null,
                 entry.warnings.length > 0
@@ -1843,6 +1864,22 @@ window.__ModuleLoader__.load({
         ? h('div', { className: 'op-banner', 'data-tone': 'warn' }, t('previewTokenMissing'))
         : null
 
+      const sourceDevices = preview.summary && Array.isArray(preview.summary.devices) ? preview.summary.devices : []
+      const sourceBlock = !isPush && sourceDevices.length > 0 && typeof props.onSelectSource === 'function'
+        ? h('div', { className: 'op-field' },
+            h('span', { className: 'op-label' }, t('pullSourceLabel')),
+            h('select', {
+              className: 'op-select',
+              value: preview.sourceDeviceId || 'self',
+              disabled: state.busy,
+              onChange: (event) => props.onSelectSource(event.currentTarget.value),
+            },
+              h('option', { value: 'self' }, t('pullSourceSelf')),
+              h('option', { value: 'latest' }, t('pullSourceLatest')),
+              sourceDevices.map((device, index) => h('option', { key: device.id || String(index), value: device.id },
+                (device.name || String(device.id || '').slice(0, 8)) + ' · ' + relativeTime(t, device.updatedAt)))))
+        : null
+
       const expiryBlock = preview.expiresAt
         ? h('div', { className: 'op-hint' }, t('previewExpires', { time: formatDateTime(preview.expiresAt) }))
         : h('div', { className: 'op-hint' }, t('previewExpiredHint'))
@@ -1882,6 +1919,7 @@ window.__ModuleLoader__.load({
             h('span', { className: 'op-metric-v' }, tile.value),
             h('span', { className: 'op-metric-k' }, tile.label)))) : null,
         tokenBlock,
+        sourceBlock,
         h('div', { className: 'op-field' },
           h('span', { className: 'op-label' }, t('previewItems') + (items.length > 0 ? ' · ' + items.length : '')),
           itemRows),
@@ -1914,7 +1952,7 @@ window.__ModuleLoader__.load({
           className: 'op-btn',
           'data-primary': '1',
           type: 'button',
-          disabled: state.busy || !preview.token,
+          disabled: state.busy || !preview.token || Boolean(preview.summary && preview.summary.noData),
           onClick: props.onConfirm,
         },
         state.busy ? Spinner() : (isPush ? h(PushIcon, { size: 14 }) : h(PullIcon, { size: 14 })),
@@ -2102,12 +2140,14 @@ window.__ModuleLoader__.load({
         }
       }
 
-      async function runPreview(direction) {
+      async function runPreview(direction, sourceDevice) {
         if (previewBusy) return
         setPreviewBusy(direction)
         setSyncError(null)
         try {
-          const raw = await api('sync', { method: 'POST', body: { direction: direction, phase: 'preview' } }, t)
+          const previewBody = { direction: direction, phase: 'preview' }
+          if (typeof sourceDevice === 'string' && sourceDevice) previewBody.sourceDevice = sourceDevice
+          const raw = await api('sync', { method: 'POST', body: previewBody }, t)
           const preview = normalizePreview(raw, direction)
           setDialog({ direction: direction, preview: preview, force: false, busy: false, error: null, errorCode: null })
         } catch (error) {
@@ -2178,7 +2218,10 @@ window.__ModuleLoader__.load({
             try {
               const forcedRaw = await api('sync', {
                 method: 'POST',
-                body: { direction: direction, phase: 'preview', force: true },
+                body: Object.assign(
+                  { direction: direction, phase: 'preview', force: true },
+                  dialog.preview && dialog.preview.sourceDeviceId ? { sourceDevice: dialog.preview.sourceDeviceId } : {},
+                ),
               }, t)
               const forcedPreview = normalizePreview(forcedRaw, direction)
               setDialog({
@@ -2344,6 +2387,7 @@ window.__ModuleLoader__.load({
           onClose: closeDialog,
           onToggleForce: toggleForce,
           onConfirm: () => { void confirmExecute() },
+          onSelectSource: (value) => { void runPreview('pull', value) },
           onRebuild: () => {
             const direction = dialog.direction
             setDialog(null)
